@@ -6,14 +6,16 @@ export type CreateEventInput = {
   laneId?: LaneId;
   type: HumanKeyEventType;
   data?: Record<string, unknown>;
+  nowIso?: string;
+  randomId?: string;
 };
 
 export function createHumanKeyEvent(input: CreateEventInput): HumanKeyEvent {
   const event: HumanKeyEvent = {
-    id: crypto.randomUUID() as EventId,
+    id: (input.randomId ?? crypto.randomUUID()) as EventId,
     contactId: input.contactId,
     type: input.type,
-    createdAt: new Date().toISOString(),
+    createdAt: input.nowIso ?? new Date().toISOString(),
   };
 
   if (input.credentialId) event.credentialId = input.credentialId;

@@ -1,9 +1,18 @@
 import type { ContactId, HumanKeyContact } from "../model/types";
 
-export function createHumanKeyContact(displayName: string, notes?: string): HumanKeyContact {
-  const now = new Date().toISOString();
+export type CreateHumanKeyContactOptions = {
+  nowIso?: string;
+  randomId?: string;
+};
+
+export function createHumanKeyContact(
+  displayName: string,
+  notes?: string,
+  options: CreateHumanKeyContactOptions = {}
+): HumanKeyContact {
+  const now = options.nowIso ?? new Date().toISOString();
   const contact: HumanKeyContact = {
-    id: crypto.randomUUID() as ContactId,
+    id: (options.randomId ?? crypto.randomUUID()) as ContactId,
     displayName,
     state: "draft",
     createdAt: now,
