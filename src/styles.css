@@ -49,7 +49,7 @@ button:disabled {
   display: flex;
   justify-content: space-between;
   gap: 2rem;
-  align-items: end;
+  align-items: start;
   padding: 2rem 0;
 }
 
@@ -72,6 +72,32 @@ button:disabled {
   color: #9ee6d8;
   font-size: 0.78rem;
   font-weight: 800;
+}
+
+.vault-card {
+  width: min(360px, 100%);
+  flex: 0 0 min(360px, 100%);
+  background: rgba(255, 255, 255, 0.065);
+  border: 1px solid rgba(158, 230, 216, 0.22);
+  border-radius: 1.2rem;
+  padding: 1rem;
+  box-shadow: 0 1rem 3rem rgba(0, 0, 0, 0.18);
+}
+
+.vault-card h2 {
+  margin: 0.15rem 0 0;
+}
+
+.vault-card .help {
+  margin: 0.8rem 0 0;
+}
+
+.section-heading.compact {
+  align-items: start;
+}
+
+.vault-actions button {
+  padding: 0.62rem 0.85rem;
 }
 
 .layout {
@@ -261,11 +287,6 @@ textarea {
   }
 }
 
-.backup-box {
-  margin-top: 1.4rem;
-  padding-top: 1rem;
-  border-top: 1px solid rgba(255, 255, 255, 0.12);
-}
 
 .danger-note {
   color: #ffcf9e;
@@ -276,4 +297,11 @@ textarea {
 .status-note {
   border-left: 3px solid rgba(158, 230, 216, 0.7);
   padding-left: 0.8rem;
+}
+
+@media (max-width: 860px) {
+  .vault-card {
+    width: 100%;
+    flex-basis: auto;
+  }
 }

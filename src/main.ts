@@ -131,7 +131,6 @@ async function renderSelectedContact(): Promise<void> {
             <button id="mark-shared" type="button" ${credential && !isRevoked ? "" : "disabled"}>Mark shared</button>
             <button id="revoke-credential" type="button" ${credential && !isRevoked ? "" : "disabled"}>Revoke</button>
           </div>
-          <p class="danger-note">Backup exports contain secret material. Store them like passwords until encrypted backups land.</p>
         </div>
 
         <div>
