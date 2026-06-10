@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#111318" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <title>Abracadoo HumanKey MVP</title>
+  </head>
+  <body>
+    <main class="app-shell">
+      <header class="hero">
+        <div>
+          <p class="eyebrow">Abracadoo / HumanKey</p>
+          <h1>Acquaintance-first verification</h1>
+          <p>
+            Create a one-way HumanKey Acquaintance, share an Authenticator-compatible token, and verify the holder later by asking for their current code.
+          </p>
+        </div>
+        <span class="pill">HK_TOTP_1</span>
+      </header>
+
+      <div class="layout">
+        <aside class="panel">
+          <h2>Create acquaintance</h2>
+          <form id="create-form" class="stack">
+            <label>
+              Local name
+              <input id="display-name" autocomplete="off" placeholder="Alice" required />
+            </label>
+            <label>
+              Notes
+              <textarea id="notes" placeholder="Why I may need to verify this person"></textarea>
+            </label>
+            <button type="submit">Create HK_TOTP_1 token</button>
+          </form>
+
+          <h2>Contacts</h2>
+          <div id="contact-list" class="contact-list"></div>
+        </aside>
+
+        <section id="selected-contact"></section>
+      </div>
+
+      <p id="fatal-error"></p>
+    </main>
+    <div id="notice" class="notice" hidden></div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

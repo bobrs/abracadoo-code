@@ -14,11 +14,54 @@ This scaffold intentionally keeps the MVP small while preserving the future Huma
 - Lanes exist in the model before messaging exists in the UI.
 - Transports such as Nostr, server messaging, and manual QR/copy-paste remain adapters, not the ontology.
 
+## Architecture pass V0.3
+
+This pass turns the architecture seed into a runnable browser/PWA shell while preserving the adapter/runtime boundary.
+
+Added:
+
+- `createBrowserRuntime()`
+- `IndexedDbStorageAdapter`
+- `IndexedDbSecretVault`
+- Vite-compatible `index.html`
+- Vanilla TypeScript UI in `src/main.ts`
+- Authenticator QR rendering with `qrcode`
+- PWA manifest and simple service worker
+- `docs/architecture-pass-v0-3.md`
+
+The UI calls HumanKey services instead of directly mutating TOTP or IndexedDB records.
+
+## Run locally
+
+```bash
+npm install
+npm run dev
+```
+
+Then open the Vite URL shown in the terminal.
+
+## Current MVP flow
+
+1. Create Acquaintance.
+2. Create `HK_TOTP_1` credential with direction `i_verify_them`.
+3. Display an Authenticator-compatible QR code and `otpauth://` URI.
+4. Mark the credential as shared.
+5. Ask the acquaintance for their current Authenticator code.
+6. Verify the 6-digit TOTP code locally.
+7. Record HumanKey lifecycle events.
+8. Revoke the credential when needed.
+
+## Important security note
+
+`IndexedDbSecretVault` currently stores secret bytes in local IndexedDB without encryption. This is acceptable for the V0.3 architecture pass because the vault boundary exists, but it is not the desired long-term security posture.
+
+The next security-oriented pass should add an encrypted local vault implementation behind the same `SecretVault` interface.
+
 ## Architecture pass V0.2
 
-This pass adds the runtime/adapters layer so the same HumanKey domain model can run locally, against a server, through Nostr, or through manual offline exchange.
+V0.2 added the runtime/adapters layer so the same HumanKey domain model can run locally, against a server, through Nostr, or through manual offline exchange.
 
-New boundaries:
+Boundaries:
 
 - `AbracadooRuntime`
 - `StorageAdapter`
@@ -38,32 +81,17 @@ Initial implementations:
 - `WebCryptoAdapter`
 - `createLocalRuntime()`
 
-Domain services now orchestrate contact, credential, event, policy, vault, and storage updates:
+Domain services orchestrate contact, credential, event, policy, vault, and storage updates:
 
 - `createAcquaintanceWithTotp()`
 - `recordCredentialShared()`
 - `verifyAcquaintanceCode()`
 - `revokeCredential()`
 
-## MVP
+## Next implementation targets
 
-1. Create Acquaintance.
-2. Create `HK_TOTP_1` credential with direction `i_verify_them`.
-3. Display an Authenticator-compatible `otpauth://` URI as a QR code.
-4. Verify a 6-digit TOTP code locally.
-5. Record verification events.
-6. Revoke/archive when needed.
-
-## Next implementation target
-
-Convert the scaffold into a runnable Vite + React + TypeScript PWA around the existing services:
-
-- Create Acquaintance screen
-- Share QR screen
-- Verify code screen
-- Contact detail/event timeline
-- Local persistence via IndexedDB adapters
-
-## Development notes
-
-This is a seed scaffold, not yet a complete app. The files are arranged so a PWA, server-backed deployment, or community/business fork can grow around the HumanKey domain model without a forklift rewrite.
+1. Add automated tests for TOTP generation, verification, revocation, and lifecycle state derivation.
+2. Add encrypted local vault implementation.
+3. Add export/import of HumanKey contacts without raw secret leakage by default.
+4. Add explicit manual transport artifacts for QR/copy/paste exchange.
+5. Add first `HK_LANE_1` placeholder UI after the Acquaintance MVP is stable.

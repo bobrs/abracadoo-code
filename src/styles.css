@@ -1,0 +1,262 @@
+:root {
+  color-scheme: light dark;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  background: #111318;
+  color: #f6f2ea;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at top left, rgba(129, 113, 255, 0.22), transparent 35rem),
+    radial-gradient(circle at bottom right, rgba(67, 210, 184, 0.14), transparent 30rem),
+    #111318;
+}
+
+button,
+input,
+textarea {
+  font: inherit;
+}
+
+button {
+  border: 0;
+  border-radius: 0.8rem;
+  padding: 0.72rem 1rem;
+  cursor: pointer;
+  background: #f6f2ea;
+  color: #111318;
+  font-weight: 700;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.app-shell {
+  width: min(1180px, calc(100% - 2rem));
+  margin: 0 auto;
+  padding: 2rem 0 4rem;
+}
+
+.hero {
+  display: flex;
+  justify-content: space-between;
+  gap: 2rem;
+  align-items: end;
+  padding: 2rem 0;
+}
+
+.hero h1 {
+  margin: 0.2rem 0 0.5rem;
+  font-size: clamp(2rem, 5vw, 4rem);
+  line-height: 0.94;
+}
+
+.hero p {
+  max-width: 50rem;
+  color: #c8c1b4;
+  font-size: 1.08rem;
+}
+
+.eyebrow {
+  margin: 0;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: #9ee6d8;
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.layout {
+  display: grid;
+  grid-template-columns: minmax(280px, 360px) 1fr;
+  gap: 1rem;
+}
+
+.panel {
+  background: rgba(255, 255, 255, 0.065);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 1.2rem;
+  padding: 1.2rem;
+  box-shadow: 0 1rem 3rem rgba(0, 0, 0, 0.18);
+}
+
+.muted-panel {
+  color: #c8c1b4;
+}
+
+.stack {
+  display: grid;
+  gap: 0.8rem;
+}
+
+label {
+  display: grid;
+  gap: 0.35rem;
+  color: #e7dfd1;
+  font-weight: 700;
+}
+
+input,
+textarea {
+  width: 100%;
+  border-radius: 0.8rem;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  padding: 0.75rem 0.85rem;
+  background: rgba(0, 0, 0, 0.22);
+  color: #f6f2ea;
+}
+
+textarea {
+  min-height: 5rem;
+  resize: vertical;
+}
+
+#otpauth-uri {
+  margin-top: 0.75rem;
+  min-height: 7rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.78rem;
+}
+
+.contact-list {
+  display: grid;
+  gap: 0.6rem;
+  margin-top: 1rem;
+}
+
+.contact-card {
+  display: grid;
+  gap: 0.2rem;
+  width: 100%;
+  text-align: left;
+  background: rgba(255, 255, 255, 0.08);
+  color: #f6f2ea;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.contact-card span {
+  color: #9ee6d8;
+  font-size: 0.85rem;
+}
+
+.contact-card.selected {
+  outline: 2px solid #9ee6d8;
+}
+
+.section-heading,
+.button-row,
+.facts div,
+.events li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.grid.two {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.2rem;
+  margin: 1rem 0 1.5rem;
+}
+
+.help,
+.empty {
+  color: #c8c1b4;
+}
+
+.pill {
+  border-radius: 999px;
+  padding: 0.35rem 0.65rem;
+  background: rgba(158, 230, 216, 0.15);
+  color: #9ee6d8;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+#qr-canvas {
+  width: 240px;
+  height: 240px;
+  max-width: 100%;
+  background: #fff;
+  border-radius: 0.8rem;
+  padding: 0.5rem;
+}
+
+.button-row {
+  justify-content: flex-start;
+  flex-wrap: wrap;
+  margin-top: 0.75rem;
+}
+
+.facts {
+  display: grid;
+  gap: 0.4rem;
+  margin-top: 1rem;
+}
+
+.facts div {
+  padding: 0.6rem 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.facts dt {
+  color: #c8c1b4;
+}
+
+.facts dd {
+  margin: 0;
+  font-weight: 800;
+}
+
+.events {
+  display: grid;
+  gap: 0.4rem;
+  padding-left: 1.2rem;
+}
+
+.events li {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 0.5rem 0;
+}
+
+.events span {
+  color: #c8c1b4;
+  font-size: 0.9rem;
+}
+
+.notice {
+  position: fixed;
+  right: 1rem;
+  bottom: 1rem;
+  max-width: min(420px, calc(100% - 2rem));
+  border-radius: 1rem;
+  padding: 1rem;
+  background: #9ee6d8;
+  color: #111318;
+  font-weight: 800;
+  box-shadow: 0 1rem 3rem rgba(0, 0, 0, 0.28);
+}
+
+#error,
+#fatal-error {
+  color: #ffb4a6;
+  font-weight: 800;
+}
+
+@media (max-width: 860px) {
+  .hero,
+  .layout,
+  .grid.two {
+    grid-template-columns: 1fr;
+    display: grid;
+  }
+}
