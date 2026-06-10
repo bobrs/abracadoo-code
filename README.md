@@ -1,4 +1,4 @@
-# Abracadoo HumanKey Seed
+# Abracadoo HumanKey Seed 
 
 Abracadoo begins with **Acquaintances**: local, one-way HumanKey contacts that let you recognize someone through an Authenticator-compatible TOTP credential.
 
