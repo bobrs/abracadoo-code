@@ -184,3 +184,11 @@ V0.8 makes the first human-to-human manual exchange easier to understand without
 - `LoopWitness` semantics remain from V0.7.2: local, `path_pair` scoped, with artifact/ciphertext digests only.
 - Relationship remains an Abracadoo.app state: established by witnessed loop, not agreement, legal consent, public trust, emotional closeness, or consent to message contents.
 - Explicit consent confirmation, QR/image/photo carriers, public/broadcast/listening Paths, server transport, and Nostr transport remain intentionally out of scope.
+
+## V0.8.1 - 140-character sealed notes
+
+Manual sealed messages are intentionally tiny for now: newly created `HK_MANUAL_MESSAGE_1` notes are limited to 140 characters before encryption. The app does not silently truncate over-limit notes; it blocks creation until the note is shortened.
+
+This is an Abracadoo.app MVP profile constraint, not a universal HumanKey or Abracadabracadoo protocol limit. It keeps the first exchange simple, prepares for future QR/image carriers, and preserves the current rule: the Path secures the message, not the carrier.
+
+Older valid sealed-message artifacts remain importable. LoopWitness and Relationship semantics are unchanged.

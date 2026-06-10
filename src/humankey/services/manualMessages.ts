@@ -49,6 +49,10 @@ export type ManualMessageArtifact = {
   timeProfile?: {
     mode: "wall_clock_totp" | "loop_local_epoch_reserved";
   };
+  messageProfile?: {
+    name: "sealed_note";
+    maxPlaintextChars: 140;
+  };
 };
 
 export type CreateManualMessageInput = {
@@ -82,7 +86,8 @@ export type ManualMessageErrorCode =
   | "WRONG_RECIPIENT"
   | "VAULT_LOCKED"
   | "DECRYPT_FAILED"
-  | "DUPLICATE_MESSAGE";
+  | "DUPLICATE_MESSAGE"
+  | "MESSAGE_TOO_LONG";
 
 export class ManualMessageError extends Error {
   readonly code: ManualMessageErrorCode;
@@ -96,8 +101,25 @@ export class ManualMessageError extends Error {
   }
 }
 
+export const MAX_SEALED_NOTE_CHARS = 140;
+
 const textEncoder = new TextEncoder();
 const textDecoder = new TextDecoder();
+
+
+export function countSealedNoteCharacters(value: string): number {
+  return Array.from(value).length;
+}
+
+export function assertSealedNotePlaintextLimit(plaintext: string): void {
+  const length = countSealedNoteCharacters(plaintext);
+  if (length > MAX_SEALED_NOTE_CHARS) {
+    throw new ManualMessageError(
+      "MESSAGE_TOO_LONG",
+      `This sealed note is ${length} characters. Sealed notes are limited to ${MAX_SEALED_NOTE_CHARS} characters for now.`
+    );
+  }
+}
 
 function bytesToBase64(bytes: Uint8Array): string {
   let binary = "";
@@ -461,6 +483,8 @@ export async function createManualMessage(
     throw new Error("Outbound path does not include manual message public-key material.");
   }
 
+  assertSealedNotePlaintextLimit(input.plaintext);
+
   const nowIso = runtime.clock.nowIso();
   const { key, ephemeralPublicJwk } = await deriveAesKeyFromSender(receivePublicKeyJwk);
   const iv = runtime.crypto.randomBytes(12);
@@ -487,6 +511,7 @@ export async function createManualMessage(
     controlledVerifiability: { sigBlockDisclosure: "absent" },
     deniability: { recipientProofMode: "none" },
     timeProfile: { mode: "wall_clock_totp" },
+    messageProfile: { name: "sealed_note", maxPlaintextChars: MAX_SEALED_NOTE_CHARS },
   };
 
   const event = createHumanKeyEvent({

@@ -11,6 +11,8 @@ import {
   importManualMessage,
   isEncryptedHumanKeyBackup,
   ManualMessageError,
+  MAX_SEALED_NOTE_CHARS,
+  countSealedNoteCharacters,
   parseArtifactText,
   PathInviteError,
   recordCredentialShared,
@@ -431,7 +433,8 @@ async function renderSelectedContact(): Promise<void> {
           <div>
             <p class="eyebrow">Messages</p>
             <h3>Sealed messages</h3>
-            <p class="help">Write a note. Abracadoo seals it for this person’s Path. The Path secures the message, not the carrier. The carrier does not need to understand it.</p>
+            <p class="help">Write a sealed note. Abracadoo seals it for this person’s Path. The Path secures the message, not the carrier. The carrier does not need to understand it.</p>
+            <p class="help">Sealed notes are limited to ${MAX_SEALED_NOTE_CHARS} characters for now. Small enough to travel almost anywhere. Enough to say: I’m here. Enough to witness a Loop. Longer messages will come later with fuller Abracadabracadoo messaging.</p>
           </div>
           <span class="pill">HK_MANUAL_MESSAGE_1</span>
         </div>
@@ -439,8 +442,9 @@ async function renderSelectedContact(): Promise<void> {
           <form id="manual-message-form" class="stack">
             <label>
               Note to seal
-              <textarea id="manual-message-text" placeholder="Write a short note for this Path..." ${sendablePaths.length > 0 ? "" : "disabled"}></textarea>
+              <textarea id="manual-message-text" maxlength="${MAX_SEALED_NOTE_CHARS + 20}" placeholder="Write a short note for this Path..." ${sendablePaths.length > 0 ? "" : "disabled"}></textarea>
             </label>
+            <p id="sealed-note-counter" class="help char-counter">${MAX_SEALED_NOTE_CHARS} characters remaining</p>
             <button type="submit" ${sendablePaths.length > 0 ? "" : "disabled"}>Create sealed message</button>
             <p class="help">Send the sealed message by any carrier: text, email, file, chat, or paper copy.</p>
             <label>
@@ -649,6 +653,11 @@ function bindSelectedContactActions(contact: HumanKeyContact, credential: HumanK
       return;
     }
     const plaintext = qs<HTMLTextAreaElement>("#manual-message-text").value.trim();
+    const plaintextChars = countSealedNoteCharacters(plaintext);
+    if (plaintextChars > MAX_SEALED_NOTE_CHARS) {
+      showNotice(`This sealed note is over ${MAX_SEALED_NOTE_CHARS} characters. Short notes travel better for now.`);
+      return;
+    }
     if (!plaintext) {
       showNotice("Write a note before sealing it.");
       return;
@@ -668,6 +677,20 @@ function bindSelectedContactActions(contact: HumanKeyContact, credential: HumanK
       showNotice(friendlyErrorMessage(error));
     }
   });
+
+  const manualMessageText = qs<HTMLTextAreaElement>("#manual-message-text");
+  const sealedNoteCounter = qs<HTMLElement>("#sealed-note-counter");
+  const updateSealedNoteCounter = () => {
+    const length = countSealedNoteCharacters(manualMessageText.value.trim());
+    const remaining = MAX_SEALED_NOTE_CHARS - length;
+    sealedNoteCounter.textContent =
+      remaining >= 0
+        ? `${remaining} characters remaining`
+        : `${Math.abs(remaining)} characters over the ${MAX_SEALED_NOTE_CHARS}-character limit`;
+    sealedNoteCounter.classList.toggle("over-limit", remaining < 0);
+  };
+  manualMessageText.addEventListener("input", updateSealedNoteCounter);
+  updateSealedNoteCounter();
 
   qs<HTMLButtonElement>("#copy-sealed-message-text").addEventListener("click", async () => {
     await copyTextToClipboard(qs<HTMLTextAreaElement>("#sealed-message-output").value, "Sealed message copied.");
@@ -824,6 +847,8 @@ function friendlyErrorMessage(error: unknown): string {
         return "This message could not be opened. It may be for a different Path or it may have changed in transit.";
       case "DUPLICATE_MESSAGE":
         return "This sealed message is already here.";
+      case "MESSAGE_TOO_LONG":
+        return "This sealed note is over 140 characters. Short notes travel better for now.";
     }
   }
   const message = error instanceof Error ? error.message : String(error);

@@ -440,3 +440,11 @@ textarea {
 .status-loop-witnessed {
   color: #ffcf9e !important;
 }
+
+.char-counter {
+  margin-top: -0.35rem;
+}
+
+.char-counter.over-limit {
+  font-weight: 700;
+}
