@@ -5,8 +5,8 @@ import type {
   HumanKeyContact,
   HumanKeyCredential,
   HumanKeyEvent,
-  HumanKeyLane,
-  LaneId,
+  HumanKeyPath,
+  PathId,
 } from "../../humankey/model/types";
 import type { StorageAdapter } from "./StorageAdapter";
 
@@ -17,7 +17,7 @@ function clone<T>(value: T): T {
 export class InMemoryStorageAdapter implements StorageAdapter {
   private readonly contacts = new Map<ContactId, HumanKeyContact>();
   private readonly credentials = new Map<CredentialId, HumanKeyCredential>();
-  private readonly lanes = new Map<LaneId, HumanKeyLane>();
+  private readonly paths = new Map<PathId, HumanKeyPath>();
   private readonly events = new Map<EventId, HumanKeyEvent>();
 
   async getContact(id: ContactId): Promise<HumanKeyContact | null> {
@@ -46,17 +46,17 @@ export class InMemoryStorageAdapter implements StorageAdapter {
     this.credentials.set(credential.id, clone(credential));
   }
 
-  async getLane(id: LaneId): Promise<HumanKeyLane | null> {
-    const lane = this.lanes.get(id);
-    return lane ? clone(lane) : null;
+  async getPath(id: PathId): Promise<HumanKeyPath | null> {
+    const path = this.paths.get(id);
+    return path ? clone(path) : null;
   }
 
-  async listLanesForContact(contactId: ContactId): Promise<HumanKeyLane[]> {
-    return [...this.lanes.values()].filter((lane) => lane.contactId === contactId).map(clone);
+  async listPathsForContact(contactId: ContactId): Promise<HumanKeyPath[]> {
+    return [...this.paths.values()].filter((path) => path.contactId === contactId).map(clone);
   }
 
-  async saveLane(lane: HumanKeyLane): Promise<void> {
-    this.lanes.set(lane.id, clone(lane));
+  async savePath(path: HumanKeyPath): Promise<void> {
+    this.paths.set(path.id, clone(path));
   }
 
   async getEvent(id: EventId): Promise<HumanKeyEvent | null> {

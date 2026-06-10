@@ -9,7 +9,7 @@ V0.5.1 is a focused confidence/polish pass on top of the encrypted local vault.
 - Exporting an encrypted backup now presents a recovery warning before download.
 - Exported encrypted backups are immediately decrypted in memory with the entered passphrase as a self-check before the file is saved.
 - The contact list now derives a UI status from the event spine.
-- An Acquaintance whose credential or lane has been shared/invited but who has never successfully validated is shown with an orange `acquaintance` label.
+- An Acquaintance whose credential or path has been shared/invited but who has never successfully validated is shown with an orange `acquaintance` label.
 
 ## Ontology note
 

@@ -11,7 +11,7 @@ A local personal deployment, server-backed community deployment, Nostr-backed tr
 - Contact
 - Acquaintance
 - Credential
-- Lane
+- Path
 - Event
 - Relationship
 
@@ -32,7 +32,7 @@ This prevents UI and services from hardcoding one environment.
 
 ### Storage
 
-Stores contacts, credentials, lanes, and events.
+Stores contacts, credentials, paths, and events.
 
 Current implementation: `InMemoryStorageAdapter`.
 

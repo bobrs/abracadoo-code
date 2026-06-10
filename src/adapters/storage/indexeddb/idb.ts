@@ -1,7 +1,7 @@
 const DB_NAME = "abracadoo-humankey";
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
-export type StoreName = "contacts" | "credentials" | "lanes" | "events" | "secrets";
+export type StoreName = "contacts" | "credentials" | "paths" | "lanes" | "events" | "secrets";
 
 let openPromise: Promise<IDBDatabase> | undefined;
 
@@ -16,7 +16,7 @@ export function openAbracadooDb(): Promise<IDBDatabase> {
     request.onupgradeneeded = () => {
       const db = request.result;
 
-      for (const storeName of ["contacts", "credentials", "lanes", "events", "secrets"] as StoreName[]) {
+      for (const storeName of ["contacts", "credentials", "paths", "lanes", "events", "secrets"] as StoreName[]) {
         if (!db.objectStoreNames.contains(storeName)) {
           const store = db.createObjectStore(storeName, { keyPath: "id" });
           if (storeName !== "secrets") {

@@ -8,7 +8,7 @@ The backup/import controls were moved out of the selected Acquaintance context a
 
 ## Why
 
-HumanKey backup/export applies to the entire local vault, not a single selected Acquaintance. It includes all local Acquaintances, credentials, events, lanes, and active TOTP secret material. Presenting it as an app-level Local Vault action prevents users from assuming they are exporting only the selected contact.
+HumanKey backup/export applies to the entire local vault, not a single selected Acquaintance. It includes all local Acquaintances, credentials, events, paths, and active TOTP secret material. Presenting it as an app-level Local Vault action prevents users from assuming they are exporting only the selected contact.
 
 ## Preserved Invariants
 

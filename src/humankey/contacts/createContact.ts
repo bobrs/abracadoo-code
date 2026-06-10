@@ -18,7 +18,7 @@ export function createHumanKeyContact(
     createdAt: now,
     updatedAt: now,
     credentialIds: [],
-    laneIds: [],
+    pathIds: [],
     eventIds: [],
     metadata: {},
   };

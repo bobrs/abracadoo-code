@@ -2,7 +2,7 @@
 
 ## Acquaintance
 
-An Acquaintance is a locally named HumanKey contact for whom I hold at least one one-way verification credential or lane, but with whom no reciprocal communication loop has yet been witnessed.
+An Acquaintance is a locally named HumanKey contact for whom I hold at least one one-way verification credential or path, but with whom no reciprocal communication loop has yet been witnessed.
 
 In the MVP, creating an Authenticator-compatible TOTP credential for someone creates an Acquaintance.
 
@@ -19,10 +19,10 @@ Credential directions:
 - `i_verify_them`: I created this credential; I trust it when they present a valid code.
 - `they_verify_me`: They created this credential; I hold it so I can prove myself to them.
 
-Lane directions:
+Path directions:
 
-- `inbound`: I control this lane; they may send to me through it.
-- `outbound`: They control this lane; I may send to them through it.
+- `inbound`: I control this path; they may send to me through it.
+- `outbound`: They control this path; I may send to them through it.
 
 ## Lifecycle
 

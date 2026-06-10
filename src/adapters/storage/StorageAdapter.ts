@@ -5,8 +5,8 @@ import type {
   HumanKeyContact,
   HumanKeyCredential,
   HumanKeyEvent,
-  HumanKeyLane,
-  LaneId,
+  HumanKeyPath,
+  PathId,
 } from "../../humankey/model/types";
 
 export interface StorageAdapter {
@@ -18,9 +18,9 @@ export interface StorageAdapter {
   listCredentialsForContact(contactId: ContactId): Promise<HumanKeyCredential[]>;
   saveCredential(credential: HumanKeyCredential): Promise<void>;
 
-  getLane(id: LaneId): Promise<HumanKeyLane | null>;
-  listLanesForContact(contactId: ContactId): Promise<HumanKeyLane[]>;
-  saveLane(lane: HumanKeyLane): Promise<void>;
+  getPath(id: PathId): Promise<HumanKeyPath | null>;
+  listPathsForContact(contactId: ContactId): Promise<HumanKeyPath[]>;
+  savePath(path: HumanKeyPath): Promise<void>;
 
   getEvent(id: EventId): Promise<HumanKeyEvent | null>;
   listEventsForContact(contactId: ContactId): Promise<HumanKeyEvent[]>;

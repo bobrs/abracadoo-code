@@ -11,7 +11,7 @@ This scaffold intentionally keeps the MVP small while preserving the future Huma
 - One-way verification creates an Acquaintance, not a Relationship.
 - Secrets live behind a vault interface.
 - Events form the lifecycle spine.
-- Lanes exist in the model before messaging exists in the UI.
+- Paths exist in the model before messaging exists in the UI.
 - Transports such as Nostr, server messaging, and manual QR/copy-paste remain adapters, not the ontology.
 
 ## Architecture pass V0.3
@@ -94,7 +94,7 @@ Domain services orchestrate contact, credential, event, policy, vault, and stora
 2. Add encrypted local vault implementation.
 3. Add export/import of HumanKey contacts without raw secret leakage by default.
 4. Add explicit manual transport artifacts for QR/copy/paste exchange.
-5. Add first `HK_LANE_1` placeholder UI after the Acquaintance MVP is stable.
+5. Add first `HK_PATH_1` placeholder UI after the Acquaintance MVP is stable.
 
 ## V0.5: encrypted local vault
 
@@ -109,18 +109,33 @@ V0.5.1 keeps the V0.5 encrypted-vault architecture and adds a small confidence/p
 - friendlier wrong-passphrase messaging
 - encrypted-backup export warning
 - encrypted-backup self-check before download
-- orange `acquaintance` label for contacts whose credential/lane has been shared but never successfully validated
+- orange `acquaintance` label for contacts whose credential/path has been shared but never successfully validated
 
 The orange label is a UI cue only; the HumanKey contact state remains `acquaintance`.
-
-## V0.6 lane invite model
-
-V0.6 adds the first app-native lane shape without implementing message delivery yet. You can create an inbound `HK_LANE_1` lane for an Acquaintance, export a public lane invite, and import someone else’s lane invite as an outbound lane. Lane exchange records HumanKey events and may move an Acquaintance into `loop_offered`, but it does not establish a Relationship.
-
-Relationship remains gated on a future completed reciprocal app-native loop.
 
 ## V0.5.2: temporary Cloudflare lockfile hygiene
 
 V0.5.2 removes `package-lock.json` from the scaffold and adds `.npmrc` with `package-lock=false` so Cloudflare Pages does not hang on the current lockfile path.
 
 This is intentionally temporary. Once the repo stabilizes, we should pin Node/npm, regenerate a clean lockfile, and switch CI/Cloudflare to `npm ci`.
+
+
+## V0.6: path invite model
+
+V0.6 adds the first visible app-native path primitive while preserving the Acquaintance/Relationship distinction.
+
+- `HK_PATH_1` path invite services
+- `ABRACADOO_HUMANKEY_PATH_INVITE` public invite artifacts
+- inbound/outbound path counts in the selected Acquaintance UI
+- `path.created`, `path.shared`, and `path.imported` events
+
+A path is one-way. Path exchange does not establish a Relationship.
+
+## V0.6.1: Path / Loop terminology alignment
+
+V0.6.1 locks in the ecosystem terminology: **Path** replaces **Lane**, and two compatible connected Paths constitute a **Loop**.
+
+- New exports use `ABRACADOO_HUMANKEY_PATH_INVITE`.
+- Domain types and services now use `HumanKeyPath`, `PathId`, `createInboundPath()`, `recordPathShared()`, and `importPathInvite()`.
+- Legacy V0.6 lane invites/backups/events are still accepted and normalized during import.
+- Relationship remains gated on a future witnessed/completed Loop.

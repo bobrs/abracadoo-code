@@ -1,9 +1,9 @@
-import type { ContactId, CredentialId, EventId, HumanKeyEvent, HumanKeyEventType, LaneId } from "../model/types";
+import type { ContactId, CredentialId, EventId, HumanKeyEvent, HumanKeyEventType, PathId } from "../model/types";
 
 export type CreateEventInput = {
   contactId: ContactId;
   credentialId?: CredentialId;
-  laneId?: LaneId;
+  pathId?: PathId;
   type: HumanKeyEventType;
   data?: Record<string, unknown>;
   nowIso?: string;
@@ -19,7 +19,7 @@ export function createHumanKeyEvent(input: CreateEventInput): HumanKeyEvent {
   };
 
   if (input.credentialId) event.credentialId = input.credentialId;
-  if (input.laneId) event.laneId = input.laneId;
+  if (input.pathId) event.pathId = input.pathId;
   if (input.data) event.data = input.data;
 
   return event;

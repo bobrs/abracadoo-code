@@ -1,7 +1,7 @@
 export type IsoTimestamp = string;
 export type ContactId = string;
 export type CredentialId = string;
-export type LaneId = string;
+export type PathId = string;
 export type EventId = string;
 export type SecretRef = string;
 
@@ -16,7 +16,7 @@ export type HumanKeyContactState =
   | "archived";
 
 export type CredentialDirection = "i_verify_them" | "they_verify_me";
-export type LaneDirection = "inbound" | "outbound";
+export type PathDirection = "inbound" | "outbound";
 
 export type HumanKeyContact = {
   id: ContactId;
@@ -26,7 +26,9 @@ export type HumanKeyContact = {
   updatedAt: IsoTimestamp;
   establishedRelationshipAt?: IsoTimestamp;
   credentialIds: CredentialId[];
-  laneIds: LaneId[];
+  pathIds: PathId[];
+  /** Legacy V0.6 field accepted from stored contacts/backups. */
+  laneIds?: PathId[];
   eventIds: EventId[];
   metadata: {
     notes?: string;
@@ -61,11 +63,11 @@ export type HumanKeyTotpCredential = {
   };
 };
 
-export type HumanKeyLane = {
-  id: LaneId;
+export type HumanKeyPath = {
+  id: PathId;
   contactId: ContactId;
-  profile: "HK_LANE_1";
-  direction: LaneDirection;
+  profile: "HK_PATH_1";
+  direction: PathDirection;
   transport:
     | { kind: "none" }
     | { kind: "nostr"; relays: string[]; publicKey: string }
@@ -89,6 +91,10 @@ export type HumanKeyEventType =
   | "credential.verified"
   | "credential.failed_verification"
   | "credential.revoked"
+  | "path.created"
+  | "path.shared"
+  | "path.imported"
+  // Legacy V0.6 event names accepted for import/state derivation.
   | "lane.created"
   | "lane.shared"
   | "lane.imported"
@@ -103,7 +109,9 @@ export type HumanKeyEvent = {
   id: EventId;
   contactId: ContactId;
   credentialId?: CredentialId;
-  laneId?: LaneId;
+  pathId?: PathId;
+  /** Legacy V0.6 field accepted for imported historical events. */
+  laneId?: PathId;
   type: HumanKeyEventType;
   createdAt: IsoTimestamp;
   data?: Record<string, unknown>;

@@ -5,7 +5,7 @@ V0.3 turns the HumanKey seed from a pure architecture scaffold into a runnable b
 ## Added
 
 - `createBrowserRuntime()` using IndexedDB-backed storage and vault adapters.
-- `IndexedDbStorageAdapter` for contacts, credentials, lanes, and events.
+- `IndexedDbStorageAdapter` for contacts, credentials, paths, and events.
 - `IndexedDbSecretVault` for local secret material behind `SecretVault`.
 - Vanilla TypeScript PWA entrypoint in `src/main.ts`.
 - Minimal app UI:
@@ -39,4 +39,4 @@ V0.3 turns the HumanKey seed from a pure architecture scaffold into a runnable b
 2. Add encrypted local vault implementation.
 3. Add export/import of HumanKey contacts without raw secret leakage by default.
 4. Add explicit manual transport artifacts for QR/copy/paste exchange.
-5. Add first `HK_LANE_1` placeholder UI after the Acquaintance MVP is stable.
+5. Add first `HK_PATH_1` placeholder UI after the Acquaintance MVP is stable.

@@ -1,4 +1,4 @@
-import type { HumanKeyContact, HumanKeyCredential, HumanKeyLane } from "../../humankey/model/types";
+import type { HumanKeyContact, HumanKeyCredential, HumanKeyPath } from "../../humankey/model/types";
 import type { PolicyAdapter, PolicyDecision } from "./PolicyAdapter";
 
 const allowed: PolicyDecision = { allowed: true };
@@ -21,12 +21,12 @@ export class LocalPersonalPolicyAdapter implements PolicyAdapter {
     return allowed;
   }
 
-  async canSendOnLane(contact: HumanKeyContact, lane: HumanKeyLane): Promise<PolicyDecision> {
+  async canSendOnPath(contact: HumanKeyContact, path: HumanKeyPath): Promise<PolicyDecision> {
     if (contact.state === "revoked" || contact.state === "archived") {
-      return { allowed: false, reason: `Cannot send on lane for ${contact.state} contact.` };
+      return { allowed: false, reason: `Cannot send on path for ${contact.state} contact.` };
     }
-    if (lane.lifecycle.revokedAt) {
-      return { allowed: false, reason: "Lane is revoked." };
+    if (path.lifecycle.revokedAt) {
+      return { allowed: false, reason: "Path is revoked." };
     }
     return allowed;
   }

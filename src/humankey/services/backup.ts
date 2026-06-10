@@ -4,7 +4,7 @@ import type {
   HumanKeyContact,
   HumanKeyCredential,
   HumanKeyEvent,
-  HumanKeyLane,
+  HumanKeyPath,
   SecretRef,
 } from "../model/types";
 
@@ -20,7 +20,7 @@ export type HumanKeyBackup = {
   warning: "SENSITIVE_HUMANKEY_BACKUP_CONTAINS_SECRET_MATERIAL";
   contacts: HumanKeyContact[];
   credentials: HumanKeyCredential[];
-  lanes: HumanKeyLane[];
+  paths: HumanKeyPath[];
   events: HumanKeyEvent[];
   secrets: HumanKeyBackupSecret[];
 };
@@ -36,26 +36,74 @@ export type EncryptedHumanKeyBackup = {
 export type ImportHumanKeyBackupResult = {
   contactsImported: number;
   credentialsImported: number;
-  lanesImported: number;
+  pathsImported: number;
   eventsImported: number;
   secretsImported: number;
 };
 
-function assertBackup(value: unknown): asserts value is HumanKeyBackup {
+function normalizeContact(contact: HumanKeyContact): HumanKeyContact {
+  const legacy = contact as HumanKeyContact & { laneIds?: string[] };
+  return {
+    ...contact,
+    pathIds: contact.pathIds ?? legacy.laneIds ?? [],
+  };
+}
+
+function normalizePath(path: HumanKeyPath): HumanKeyPath {
+  const legacy = path as HumanKeyPath & { profile?: "HK_PATH_1" | "HK_LANE_1" };
+  return {
+    ...path,
+    profile: "HK_PATH_1",
+  };
+}
+
+function normalizeEvent(event: HumanKeyEvent): HumanKeyEvent {
+  const legacy = event as HumanKeyEvent & { laneId?: string };
+  const legacyTypeMap: Record<string, HumanKeyEvent["type"]> = {
+    "lane.created": "path.created",
+    "lane.shared": "path.shared",
+    "lane.imported": "path.imported",
+  };
+  const normalized: HumanKeyEvent = {
+    ...event,
+    type: legacyTypeMap[event.type] ?? event.type,
+  };
+  const pathId = event.pathId ?? legacy.laneId;
+  if (pathId) normalized.pathId = pathId;
+  return normalized;
+}
+
+function assertBackup(value: unknown): asserts value is HumanKeyBackup | (Omit<HumanKeyBackup, "paths"> & { lanes: HumanKeyPath[] }) {
   if (!value || typeof value !== "object") {
     throw new Error("Backup is not an object.");
   }
 
-  const candidate = value as Partial<HumanKeyBackup>;
+  const candidate = value as Partial<HumanKeyBackup> & { lanes?: HumanKeyPath[] };
   if (candidate.schema !== "ABRACADOO_HUMANKEY_BACKUP" || candidate.schemaVersion !== 1) {
     throw new Error("Unsupported Abracadoo HumanKey backup schema.");
   }
 
-  for (const field of ["contacts", "credentials", "lanes", "events", "secrets"] as const) {
+  for (const field of ["contacts", "credentials", "events", "secrets"] as const) {
     if (!Array.isArray(candidate[field])) {
       throw new Error(`Backup field is missing or invalid: ${field}`);
     }
   }
+
+  if (!Array.isArray(candidate.paths) && !Array.isArray(candidate.lanes)) {
+    throw new Error("Backup field is missing or invalid: paths");
+  }
+}
+
+function normalizeBackup(value: unknown): HumanKeyBackup {
+  assertBackup(value);
+  const candidate = value as HumanKeyBackup & { lanes?: HumanKeyPath[] };
+  const paths = candidate.paths ?? candidate.lanes ?? [];
+  return {
+    ...candidate,
+    contacts: candidate.contacts.map(normalizeContact),
+    paths: paths.map(normalizePath),
+    events: candidate.events.map(normalizeEvent),
+  };
 }
 
 function assertEncryptedBackup(value: unknown): asserts value is EncryptedHumanKeyBackup {
@@ -88,11 +136,11 @@ export async function exportHumanKeyBackup(runtime: AbracadooRuntime): Promise<H
   const credentialsNested = await Promise.all(
     contacts.map((contact) => runtime.storage.listCredentialsForContact(contact.id))
   );
-  const lanesNested = await Promise.all(contacts.map((contact) => runtime.storage.listLanesForContact(contact.id)));
+  const pathsNested = await Promise.all(contacts.map((contact) => runtime.storage.listPathsForContact(contact.id)));
   const eventsNested = await Promise.all(contacts.map((contact) => runtime.storage.listEventsForContact(contact.id)));
 
   const credentials = credentialsNested.flat();
-  const lanes = lanesNested.flat();
+  const paths = pathsNested.flat();
   const events = eventsNested.flat();
   const secretRefs = unique(credentials.map((credential) => credential.secretRef));
   const secrets: HumanKeyBackupSecret[] = [];
@@ -117,7 +165,7 @@ export async function exportHumanKeyBackup(runtime: AbracadooRuntime): Promise<H
     warning: "SENSITIVE_HUMANKEY_BACKUP_CONTAINS_SECRET_MATERIAL",
     contacts,
     credentials,
-    lanes,
+    paths,
     events,
     secrets,
   };
@@ -143,32 +191,31 @@ export async function decryptEncryptedHumanKeyBackup(
 ): Promise<HumanKeyBackup> {
   assertEncryptedBackup(input);
   const decrypted = await decryptJsonWithPassphrase<unknown>(input.encrypted, passphrase);
-  assertBackup(decrypted);
-  return decrypted;
+  return normalizeBackup(decrypted);
 }
 
 export async function importHumanKeyBackup(
   runtime: AbracadooRuntime,
   input: unknown
 ): Promise<ImportHumanKeyBackupResult> {
-  assertBackup(input);
+  const backup = normalizeBackup(input);
 
   const secretRefMap = new Map<SecretRef, SecretRef>();
 
-  for (const secret of input.secrets) {
+  for (const secret of backup.secrets) {
     const restoredRef = await runtime.vault.createSecret({
       purpose: "HK_TOTP_1",
       material: new Uint8Array(secret.material),
-      createdAt: input.exportedAt,
+      createdAt: backup.exportedAt,
     });
     secretRefMap.set(secret.originalRef, restoredRef);
   }
 
-  for (const contact of input.contacts) {
+  for (const contact of backup.contacts) {
     await runtime.storage.saveContact(contact);
   }
 
-  for (const credential of input.credentials) {
+  for (const credential of backup.credentials) {
     const restoredSecretRef = secretRefMap.get(credential.secretRef);
     if (!restoredSecretRef && !credential.lifecycle.revokedAt) {
       throw new Error(`Missing secret material for credential: ${credential.id}`);
@@ -176,19 +223,19 @@ export async function importHumanKeyBackup(
     await runtime.storage.saveCredential({ ...credential, secretRef: restoredSecretRef ?? credential.secretRef });
   }
 
-  for (const lane of input.lanes) {
-    await runtime.storage.saveLane(lane);
+  for (const path of backup.paths) {
+    await runtime.storage.savePath(path);
   }
 
-  for (const event of input.events) {
+  for (const event of backup.events) {
     await runtime.storage.appendEvent(event);
   }
 
   return {
-    contactsImported: input.contacts.length,
-    credentialsImported: input.credentials.length,
-    lanesImported: input.lanes.length,
-    eventsImported: input.events.length,
-    secretsImported: input.secrets.length,
+    contactsImported: backup.contacts.length,
+    credentialsImported: backup.credentials.length,
+    pathsImported: backup.paths.length,
+    eventsImported: backup.events.length,
+    secretsImported: backup.secrets.length,
   };
 }

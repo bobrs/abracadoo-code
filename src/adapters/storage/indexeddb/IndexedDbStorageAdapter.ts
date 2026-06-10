@@ -5,19 +5,29 @@ import type {
   HumanKeyContact,
   HumanKeyCredential,
   HumanKeyEvent,
-  HumanKeyLane,
-  LaneId,
+  HumanKeyPath,
+  PathId,
 } from "../../../humankey/model/types";
 import type { StorageAdapter } from "../StorageAdapter";
 import { getAllByContactId, getAllRecords, getRecord, putRecord } from "./idb";
 
+function normalizeContact(contact: HumanKeyContact | null): HumanKeyContact | null {
+  if (!contact) return null;
+  return { ...contact, pathIds: contact.pathIds ?? contact.laneIds ?? [] };
+}
+
+function normalizePath(path: HumanKeyPath | null): HumanKeyPath | null {
+  if (!path) return null;
+  return { ...path, profile: "HK_PATH_1" };
+}
+
 export class IndexedDbStorageAdapter implements StorageAdapter {
-  getContact(id: ContactId): Promise<HumanKeyContact | null> {
-    return getRecord<HumanKeyContact>("contacts", id);
+  async getContact(id: ContactId): Promise<HumanKeyContact | null> {
+    return normalizeContact(await getRecord<HumanKeyContact>("contacts", id));
   }
 
-  listContacts(): Promise<HumanKeyContact[]> {
-    return getAllRecords<HumanKeyContact>("contacts");
+  async listContacts(): Promise<HumanKeyContact[]> {
+    return (await getAllRecords<HumanKeyContact>("contacts")).map((contact) => normalizeContact(contact)!);
   }
 
   saveContact(contact: HumanKeyContact): Promise<void> {
@@ -36,16 +46,20 @@ export class IndexedDbStorageAdapter implements StorageAdapter {
     return putRecord("credentials", credential);
   }
 
-  getLane(id: LaneId): Promise<HumanKeyLane | null> {
-    return getRecord<HumanKeyLane>("lanes", id);
+  async getPath(id: PathId): Promise<HumanKeyPath | null> {
+    return normalizePath((await getRecord<HumanKeyPath>("paths", id)) ?? (await getRecord<HumanKeyPath>("lanes", id)));
   }
 
-  listLanesForContact(contactId: ContactId): Promise<HumanKeyLane[]> {
-    return getAllByContactId<HumanKeyLane>("lanes", contactId);
+  async listPathsForContact(contactId: ContactId): Promise<HumanKeyPath[]> {
+    const [paths, legacyLanes] = await Promise.all([
+      getAllByContactId<HumanKeyPath>("paths", contactId),
+      getAllByContactId<HumanKeyPath>("lanes", contactId),
+    ]);
+    return [...paths, ...legacyLanes].map((path) => normalizePath(path)!);
   }
 
-  saveLane(lane: HumanKeyLane): Promise<void> {
-    return putRecord("lanes", lane);
+  savePath(path: HumanKeyPath): Promise<void> {
+    return putRecord("paths", path);
   }
 
   getEvent(id: EventId): Promise<HumanKeyEvent | null> {

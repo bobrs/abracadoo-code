@@ -7,7 +7,7 @@ V0.4 turns the working HK_TOTP_1 MVP into a more durable local-first Acquaintanc
 - Preserve the HumanKey ontology: Acquaintance first, Relationship only after a completed reciprocal loop.
 - Make local browser state portable through explicit export/import.
 - Keep backup semantics at the HumanKey service layer, not inside the UI.
-- Add automated tests around the core Acquaintance primitive before expanding into messaging lanes.
+- Add automated tests around the core Acquaintance primitive before expanding into messaging paths.
 
 ## Added
 
@@ -19,7 +19,7 @@ V0.4 turns the working HK_TOTP_1 MVP into a more durable local-first Acquaintanc
 - `importHumanKeyBackup(runtime, backup)`
 - `HumanKeyBackup` schema version `1`
 
-The backup includes contacts, credentials, lanes, events, and secret material required to preserve local verification ability.
+The backup includes contacts, credentials, paths, events, and secret material required to preserve local verification ability.
 
 Current backups are intentionally labeled:
 
@@ -68,5 +68,5 @@ Import currently restores secret material into the active runtime vault and rema
 - Backup JSON is sensitive plaintext.
 - Import currently overwrites matching IDs rather than performing conflict-aware merge.
 - No encrypted local vault yet.
-- No app-native lane exchange yet.
+- No app-native path exchange yet.
 - No QR-based app-native import/export yet.

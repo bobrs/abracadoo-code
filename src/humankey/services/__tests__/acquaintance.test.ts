@@ -2,14 +2,14 @@ import { describe, expect, it } from "vitest";
 import { createLocalRuntime } from "../../../runtime/createLocalRuntime";
 import {
   createAcquaintanceWithTotp,
-  createInboundLane,
+  createInboundPath,
   decryptEncryptedHumanKeyBackup,
   exportEncryptedHumanKeyBackup,
   exportHumanKeyBackup,
   importHumanKeyBackup,
-  importLaneInvite,
+  importPathInvite,
   revokeCredential,
-  recordLaneShared,
+  recordPathShared,
   verifyAcquaintanceCode,
 } from "..";
 import type { HumanKeyTotpCredential } from "../../model/types";
@@ -133,15 +133,15 @@ describe("HumanKey Acquaintance HK_TOTP_1", () => {
     expect(result.valid).toBe(true);
   });
 
-  it("creates, shares, exports, and imports lane invites without establishing a relationship", async () => {
+  it("creates, shares, exports, and imports path invites without establishing a relationship", async () => {
     const { runtime, contact } = await createVerifiedAcquaintance();
 
-    const createdLane = await createInboundLane(runtime, { contactId: contact.id });
-    expect(createdLane.lane.direction).toBe("inbound");
-    expect(createdLane.invite.schema).toBe("ABRACADOO_HUMANKEY_LANE_INVITE");
+    const createdPath = await createInboundPath(runtime, { contactId: contact.id });
+    expect(createdPath.path.direction).toBe("inbound");
+    expect(createdPath.invite.schema).toBe("ABRACADOO_HUMANKEY_PATH_INVITE");
 
-    const sharedInvite = await recordLaneShared(runtime, createdLane.lane.id);
-    expect(sharedInvite.lane.inviteId).toBe(createdLane.lane.id);
+    const sharedInvite = await recordPathShared(runtime, createdPath.path.id);
+    expect(sharedInvite.path.inviteId).toBe(createdPath.path.id);
 
     const storedAfterShare = await runtime.storage.getContact(contact.id);
     expect(storedAfterShare?.state).toBe("loop_offered");
@@ -149,10 +149,10 @@ describe("HumanKey Acquaintance HK_TOTP_1", () => {
 
     const restoredRuntime = createLocalRuntime();
     const restored = await createAcquaintanceWithTotp(restoredRuntime, { displayName: "Bob" });
-    const imported = await importLaneInvite(restoredRuntime, { contactId: restored.contact.id, invite: sharedInvite });
+    const imported = await importPathInvite(restoredRuntime, { contactId: restored.contact.id, invite: sharedInvite });
 
-    expect(imported.lane.direction).toBe("outbound");
-    expect(imported.lane.transport.kind).toBe("local");
+    expect(imported.path.direction).toBe("outbound");
+    expect(imported.path.transport.kind).toBe("local");
 
     const restoredContact = await restoredRuntime.storage.getContact(restored.contact.id);
     expect(restoredContact?.state).toBe("loop_offered");

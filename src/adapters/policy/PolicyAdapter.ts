@@ -1,4 +1,4 @@
-import type { HumanKeyContact, HumanKeyCredential, HumanKeyLane } from "../../humankey/model/types";
+import type { HumanKeyContact, HumanKeyCredential, HumanKeyPath } from "../../humankey/model/types";
 
 export type PolicyDecision = {
   allowed: boolean;
@@ -8,6 +8,6 @@ export type PolicyDecision = {
 export interface PolicyAdapter {
   canCreateCredential(contact: HumanKeyContact): Promise<PolicyDecision>;
   canVerifyCredential(contact: HumanKeyContact, credential: HumanKeyCredential): Promise<PolicyDecision>;
-  canSendOnLane(contact: HumanKeyContact, lane: HumanKeyLane): Promise<PolicyDecision>;
+  canSendOnPath(contact: HumanKeyContact, path: HumanKeyPath): Promise<PolicyDecision>;
   canPromoteToRelationship(contact: HumanKeyContact): Promise<PolicyDecision>;
 }
