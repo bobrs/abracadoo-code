@@ -23,15 +23,23 @@
           <div class="section-heading compact">
             <div>
               <p class="eyebrow">Local vault</p>
-              <h2 id="vault-title">Backup</h2>
+              <h2 id="vault-title">Encrypted vault</h2>
             </div>
+            <span id="vault-status" class="pill">checking</span>
           </div>
           <p class="help">
-            Export/import preserves all local Acquaintances, events, and active TOTP secrets.
-            Current exports are sensitive plaintext JSON.
+            Active TOTP secrets are encrypted in local browser storage after unlock. Encrypted backups are passphrase-wrapped JSON.
           </p>
+          <label class="vault-passphrase-label">
+            Vault passphrase
+            <input id="vault-passphrase" type="password" autocomplete="current-password" placeholder="Set or unlock local vault" />
+          </label>
           <div class="button-row vault-actions">
-            <button id="export-backup" type="button">Export backup</button>
+            <button id="unlock-vault" type="button">Unlock / set up</button>
+            <button id="lock-vault" type="button">Lock</button>
+          </div>
+          <div class="button-row vault-actions">
+            <button id="export-backup" type="button">Export encrypted backup</button>
             <button id="import-backup-trigger" type="button">Import backup</button>
             <input id="import-backup-file" type="file" accept="application/json,.json" hidden />
           </div>

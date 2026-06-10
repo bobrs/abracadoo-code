@@ -1,4 +1,5 @@
 import type { AbracadooRuntime } from "../../runtime/AbracadooRuntime";
+import { decryptJsonWithPassphrase, encryptJsonWithPassphrase, type EncryptedPayload } from "../../vault/crypto/passphraseCrypto";
 import type {
   HumanKeyContact,
   HumanKeyCredential,
@@ -24,6 +25,14 @@ export type HumanKeyBackup = {
   secrets: HumanKeyBackupSecret[];
 };
 
+export type EncryptedHumanKeyBackup = {
+  schema: "ABRACADOO_HUMANKEY_ENCRYPTED_BACKUP";
+  schemaVersion: 1;
+  exportedAt: string;
+  warning: "ENCRYPTED_HUMANKEY_BACKUP_REQUIRES_PASSPHRASE";
+  encrypted: EncryptedPayload;
+};
+
 export type ImportHumanKeyBackupResult = {
   contactsImported: number;
   credentialsImported: number;
@@ -47,6 +56,27 @@ function assertBackup(value: unknown): asserts value is HumanKeyBackup {
       throw new Error(`Backup field is missing or invalid: ${field}`);
     }
   }
+}
+
+function assertEncryptedBackup(value: unknown): asserts value is EncryptedHumanKeyBackup {
+  if (!value || typeof value !== "object") {
+    throw new Error("Backup is not an object.");
+  }
+  const candidate = value as Partial<EncryptedHumanKeyBackup>;
+  if (candidate.schema !== "ABRACADOO_HUMANKEY_ENCRYPTED_BACKUP" || candidate.schemaVersion !== 1) {
+    throw new Error("Unsupported Abracadoo encrypted backup schema.");
+  }
+  if (!candidate.encrypted || typeof candidate.encrypted !== "object") {
+    throw new Error("Encrypted backup payload is missing.");
+  }
+}
+
+export function isEncryptedHumanKeyBackup(value: unknown): value is EncryptedHumanKeyBackup {
+  return Boolean(
+    value &&
+      typeof value === "object" &&
+      (value as Partial<EncryptedHumanKeyBackup>).schema === "ABRACADOO_HUMANKEY_ENCRYPTED_BACKUP"
+  );
 }
 
 function unique<T>(values: T[]): T[] {
@@ -91,6 +121,30 @@ export async function exportHumanKeyBackup(runtime: AbracadooRuntime): Promise<H
     events,
     secrets,
   };
+}
+
+export async function exportEncryptedHumanKeyBackup(
+  runtime: AbracadooRuntime,
+  passphrase: string
+): Promise<EncryptedHumanKeyBackup> {
+  const backup = await exportHumanKeyBackup(runtime);
+  return {
+    schema: "ABRACADOO_HUMANKEY_ENCRYPTED_BACKUP",
+    schemaVersion: 1,
+    exportedAt: runtime.clock.nowIso(),
+    warning: "ENCRYPTED_HUMANKEY_BACKUP_REQUIRES_PASSPHRASE",
+    encrypted: await encryptJsonWithPassphrase(backup, passphrase),
+  };
+}
+
+export async function decryptEncryptedHumanKeyBackup(
+  input: unknown,
+  passphrase: string
+): Promise<HumanKeyBackup> {
+  assertEncryptedBackup(input);
+  const decrypted = await decryptJsonWithPassphrase<unknown>(input.encrypted, passphrase);
+  assertBackup(decrypted);
+  return decrypted;
 }
 
 export async function importHumanKeyBackup(

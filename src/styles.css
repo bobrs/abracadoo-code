@@ -305,3 +305,7 @@ textarea {
     flex-basis: auto;
   }
 }
+
+.vault-passphrase-label {
+  margin-top: 0.9rem;
+}

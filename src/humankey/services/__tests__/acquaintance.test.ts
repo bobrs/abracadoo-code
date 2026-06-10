@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import { createLocalRuntime } from "../../../runtime/createLocalRuntime";
 import {
   createAcquaintanceWithTotp,
+  decryptEncryptedHumanKeyBackup,
+  exportEncryptedHumanKeyBackup,
   exportHumanKeyBackup,
   importHumanKeyBackup,
   revokeCredential,
@@ -106,4 +108,26 @@ describe("HumanKey Acquaintance HK_TOTP_1", () => {
 
     expect(result.valid).toBe(true);
   });
+
+  it("exports and imports encrypted backup while preserving verification ability", async () => {
+    const { runtime, contact, credential, code } = await createVerifiedAcquaintance();
+    const encryptedBackup = await exportEncryptedHumanKeyBackup(runtime, "test-backup-passphrase");
+
+    expect(encryptedBackup.schema).toBe("ABRACADOO_HUMANKEY_ENCRYPTED_BACKUP");
+    expect(JSON.stringify(encryptedBackup)).not.toContain(String(code));
+
+    const decryptedBackup = await decryptEncryptedHumanKeyBackup(encryptedBackup, "test-backup-passphrase");
+    const restoredRuntime = createLocalRuntime();
+    await importHumanKeyBackup(restoredRuntime, decryptedBackup);
+
+    const result = await verifyAcquaintanceCode(restoredRuntime, {
+      contactId: contact.id,
+      credentialId: credential.id,
+      code,
+      timestampMs: FIXED_TIMESTAMP_MS,
+    });
+
+    expect(result.valid).toBe(true);
+  });
+
 });

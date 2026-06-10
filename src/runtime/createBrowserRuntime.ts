@@ -3,7 +3,7 @@ import { WebCryptoAdapter } from "../adapters/crypto/WebCryptoAdapter";
 import { LocalPersonalPolicyAdapter } from "../adapters/policy/LocalPersonalPolicyAdapter";
 import { IndexedDbStorageAdapter } from "../adapters/storage/indexeddb/IndexedDbStorageAdapter";
 import { ManualTransportAdapter } from "../adapters/transport/ManualTransportAdapter";
-import { IndexedDbSecretVault } from "../vault/indexeddb/IndexedDbSecretVault";
+import { EncryptedIndexedDbSecretVault } from "../vault/indexeddb/EncryptedIndexedDbSecretVault";
 import type { AbracadooRuntime } from "./AbracadooRuntime";
 
 export function createBrowserRuntime(): AbracadooRuntime {
@@ -11,7 +11,7 @@ export function createBrowserRuntime(): AbracadooRuntime {
 
   return {
     storage: new IndexedDbStorageAdapter(),
-    vault: new IndexedDbSecretVault(),
+    vault: new EncryptedIndexedDbSecretVault(),
     transports: {
       manual: new ManualTransportAdapter(clock),
     },

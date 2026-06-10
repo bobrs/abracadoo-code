@@ -11,3 +11,22 @@ export interface SecretVault {
   readSecret(ref: SecretRef): Promise<Uint8Array>;
   deleteSecret(ref: SecretRef): Promise<void>;
 }
+
+export interface UnlockableSecretVault extends SecretVault {
+  isUnlocked(): boolean;
+  hasVault(): Promise<boolean>;
+  initialize(passphrase: string): Promise<void>;
+  unlock(passphrase: string): Promise<void>;
+  lock(): void;
+}
+
+export function isUnlockableSecretVault(vault: SecretVault): vault is UnlockableSecretVault {
+  const candidate = vault as Partial<UnlockableSecretVault>;
+  return (
+    typeof candidate.isUnlocked === "function" &&
+    typeof candidate.hasVault === "function" &&
+    typeof candidate.initialize === "function" &&
+    typeof candidate.unlock === "function" &&
+    typeof candidate.lock === "function"
+  );
+}

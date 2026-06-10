@@ -95,3 +95,8 @@ Domain services orchestrate contact, credential, event, policy, vault, and stora
 3. Add export/import of HumanKey contacts without raw secret leakage by default.
 4. Add explicit manual transport artifacts for QR/copy/paste exchange.
 5. Add first `HK_LANE_1` placeholder UI after the Acquaintance MVP is stable.
+
+## V0.5: encrypted local vault
+
+V0.5 replaces the browser runtime's plaintext IndexedDB secret vault with `EncryptedIndexedDbSecretVault`. Users set/unlock a local vault passphrase before creating or verifying HK_TOTP_1 credentials. Active TOTP secret material is encrypted at rest in IndexedDB, and V0.5 exports are encrypted passphrase-wrapped JSON backups. V0.4 plaintext backups can still be imported and are stored through the encrypted vault after import.
+

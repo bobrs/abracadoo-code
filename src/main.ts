@@ -2,13 +2,16 @@ import * as QRCode from "qrcode";
 import { createBrowserRuntime } from "./runtime/createBrowserRuntime";
 import {
   createAcquaintanceWithTotp,
-  exportHumanKeyBackup,
+  decryptEncryptedHumanKeyBackup,
+  exportEncryptedHumanKeyBackup,
   importHumanKeyBackup,
+  isEncryptedHumanKeyBackup,
   recordCredentialShared,
   revokeCredential,
   verifyAcquaintanceCode,
 } from "./humankey/services";
 import type { HumanKeyContact, HumanKeyEvent, HumanKeyTotpCredential } from "./humankey/model/types";
+import { isUnlockableSecretVault } from "./vault/SecretVault";
 import "./styles.css";
 
 const runtime = createBrowserRuntime();
@@ -195,6 +198,12 @@ function bindSelectedContactActions(contact: HumanKeyContact, credential?: Human
   qs<HTMLFormElement>("#verify-form").addEventListener("submit", async (event) => {
     event.preventDefault();
     if (!credential) return;
+    try {
+      await ensureVaultUnlocked();
+    } catch (error) {
+      showNotice(error instanceof Error ? error.message : String(error));
+      return;
+    }
     const code = qs<HTMLInputElement>("#verify-code").value.trim();
     const result = await verifyAcquaintanceCode(runtime, {
       contactId: contact.id,
@@ -207,12 +216,77 @@ function bindSelectedContactActions(contact: HumanKeyContact, credential?: Human
 }
 
 
+
+async function refreshVaultStatus(): Promise<void> {
+  const status = qs<HTMLElement>("#vault-status");
+  if (!isUnlockableSecretVault(runtime.vault)) {
+    status.textContent = "open";
+    return;
+  }
+
+  const hasVault = await runtime.vault.hasVault();
+  status.textContent = runtime.vault.isUnlocked() ? "unlocked" : hasVault ? "locked" : "new";
+}
+
+function getVaultPassphraseFromUi(): string {
+  return qs<HTMLInputElement>("#vault-passphrase").value;
+}
+
+async function ensureVaultUnlocked(): Promise<void> {
+  if (!isUnlockableSecretVault(runtime.vault)) return;
+  if (runtime.vault.isUnlocked()) return;
+
+  const passphrase = getVaultPassphraseFromUi() || prompt("Enter your local vault passphrase") || "";
+  if (!passphrase) throw new Error("Vault passphrase is required.");
+
+  if (await runtime.vault.hasVault()) {
+    await runtime.vault.unlock(passphrase);
+  } else {
+    await runtime.vault.initialize(passphrase);
+  }
+  await refreshVaultStatus();
+}
+
+function askBackupPassphrase(action: "export" | "import"): string {
+  const message = action === "export"
+    ? "Enter a passphrase for this encrypted backup"
+    : "Enter the passphrase for this encrypted backup";
+  const passphrase = prompt(message) || "";
+  if (!passphrase) throw new Error("Backup passphrase is required.");
+  if (passphrase.length < 8) throw new Error("Use a backup passphrase of at least 8 characters.");
+  return passphrase;
+}
+
 async function bindBackupActions(): Promise<void> {
+  qs<HTMLButtonElement>("#unlock-vault").addEventListener("click", async () => {
+    try {
+      await ensureVaultUnlocked();
+      qs<HTMLInputElement>("#vault-passphrase").value = "";
+      showNotice("Local vault unlocked.");
+      await render();
+    } catch (error) {
+      showNotice(error instanceof Error ? error.message : String(error));
+    }
+  });
+
+  qs<HTMLButtonElement>("#lock-vault").addEventListener("click", async () => {
+    if (isUnlockableSecretVault(runtime.vault)) runtime.vault.lock();
+    qs<HTMLInputElement>("#vault-passphrase").value = "";
+    await refreshVaultStatus();
+    showNotice("Local vault locked.");
+  });
+
   qs<HTMLButtonElement>("#export-backup").addEventListener("click", async () => {
-    const backup = await exportHumanKeyBackup(runtime);
-    const filename = `${currentDateStamp()}__ABRACADOO__BACKUP__HUMANKEY-LOCAL__V0-4__sensitive.json`;
-    downloadTextFile(filename, JSON.stringify(backup, null, 2), "application/json");
-    showNotice("Sensitive HumanKey backup exported.");
+    try {
+      await ensureVaultUnlocked();
+      const backupPassphrase = askBackupPassphrase("export");
+      const backup = await exportEncryptedHumanKeyBackup(runtime, backupPassphrase);
+      const filename = `${currentDateStamp()}__ABRACADOO__BACKUP__HUMANKEY-LOCAL__V0-5__encrypted.json`;
+      downloadTextFile(filename, JSON.stringify(backup, null, 2), "application/json");
+      showNotice("Encrypted HumanKey backup exported.");
+    } catch (error) {
+      showNotice(error instanceof Error ? error.message : String(error));
+    }
   });
 
   qs<HTMLButtonElement>("#import-backup-trigger").addEventListener("click", () => {
@@ -225,8 +299,12 @@ async function bindBackupActions(): Promise<void> {
     if (!file) return;
 
     try {
+      await ensureVaultUnlocked();
       const parsed = JSON.parse(await file.text()) as unknown;
-      const result = await importHumanKeyBackup(runtime, parsed);
+      const backup = isEncryptedHumanKeyBackup(parsed)
+        ? await decryptEncryptedHumanKeyBackup(parsed, askBackupPassphrase("import"))
+        : parsed;
+      const result = await importHumanKeyBackup(runtime, backup);
       selectedContactId = undefined;
       showNotice(
         `Imported ${result.contactsImported} contacts, ${result.credentialsImported} credentials, and ${result.eventsImported} events.`
@@ -248,6 +326,13 @@ async function bindCreateForm(): Promise<void> {
     const displayName = displayNameInput.value.trim();
     const notes = notesInput.value.trim();
     if (!displayName) return;
+
+    try {
+      await ensureVaultUnlocked();
+    } catch (error) {
+      showNotice(error instanceof Error ? error.message : String(error));
+      return;
+    }
 
     const result = await createAcquaintanceWithTotp(runtime, {
       displayName,
@@ -287,6 +372,7 @@ async function render(): Promise<void> {
 async function main(): Promise<void> {
   await bindCreateForm();
   await bindBackupActions();
+  await refreshVaultStatus();
   await render();
 
   if ("serviceWorker" in navigator) {
