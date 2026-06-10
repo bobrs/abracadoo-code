@@ -112,3 +112,9 @@ V0.5.1 keeps the V0.5 encrypted-vault architecture and adds a small confidence/p
 - orange `acquaintance` label for contacts whose credential/lane has been shared but never successfully validated
 
 The orange label is a UI cue only; the HumanKey contact state remains `acquaintance`.
+
+## V0.5.2: temporary Cloudflare lockfile hygiene
+
+V0.5.2 removes `package-lock.json` from the scaffold and adds `.npmrc` with `package-lock=false` so Cloudflare Pages does not hang on the current lockfile path.
+
+This is intentionally temporary. Once the repo stabilizes, we should pin Node/npm, regenerate a clean lockfile, and switch CI/Cloudflare to `npm ci`.
