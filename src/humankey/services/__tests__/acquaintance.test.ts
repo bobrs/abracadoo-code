@@ -2,11 +2,14 @@ import { describe, expect, it } from "vitest";
 import { createLocalRuntime } from "../../../runtime/createLocalRuntime";
 import {
   createAcquaintanceWithTotp,
+  createInboundLane,
   decryptEncryptedHumanKeyBackup,
   exportEncryptedHumanKeyBackup,
   exportHumanKeyBackup,
   importHumanKeyBackup,
+  importLaneInvite,
   revokeCredential,
+  recordLaneShared,
   verifyAcquaintanceCode,
 } from "..";
 import type { HumanKeyTotpCredential } from "../../model/types";
@@ -128,6 +131,32 @@ describe("HumanKey Acquaintance HK_TOTP_1", () => {
     });
 
     expect(result.valid).toBe(true);
+  });
+
+  it("creates, shares, exports, and imports lane invites without establishing a relationship", async () => {
+    const { runtime, contact } = await createVerifiedAcquaintance();
+
+    const createdLane = await createInboundLane(runtime, { contactId: contact.id });
+    expect(createdLane.lane.direction).toBe("inbound");
+    expect(createdLane.invite.schema).toBe("ABRACADOO_HUMANKEY_LANE_INVITE");
+
+    const sharedInvite = await recordLaneShared(runtime, createdLane.lane.id);
+    expect(sharedInvite.lane.inviteId).toBe(createdLane.lane.id);
+
+    const storedAfterShare = await runtime.storage.getContact(contact.id);
+    expect(storedAfterShare?.state).toBe("loop_offered");
+    expect(storedAfterShare?.state).not.toBe("relationship");
+
+    const restoredRuntime = createLocalRuntime();
+    const restored = await createAcquaintanceWithTotp(restoredRuntime, { displayName: "Bob" });
+    const imported = await importLaneInvite(restoredRuntime, { contactId: restored.contact.id, invite: sharedInvite });
+
+    expect(imported.lane.direction).toBe("outbound");
+    expect(imported.lane.transport.kind).toBe("local");
+
+    const restoredContact = await restoredRuntime.storage.getContact(restored.contact.id);
+    expect(restoredContact?.state).toBe("loop_offered");
+    expect(restoredContact?.state).not.toBe("relationship");
   });
 
 });

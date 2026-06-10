@@ -5,12 +5,15 @@ import {
   decryptEncryptedHumanKeyBackup,
   exportEncryptedHumanKeyBackup,
   importHumanKeyBackup,
+  importLaneInvite,
   isEncryptedHumanKeyBackup,
   recordCredentialShared,
+  recordLaneShared,
+  createInboundLane,
   revokeCredential,
   verifyAcquaintanceCode,
 } from "./humankey/services";
-import type { HumanKeyContact, HumanKeyEvent, HumanKeyTotpCredential } from "./humankey/model/types";
+import type { HumanKeyContact, HumanKeyEvent, HumanKeyLane, HumanKeyTotpCredential } from "./humankey/model/types";
 import { isUnlockableSecretVault } from "./vault/SecretVault";
 import "./styles.css";
 
@@ -50,6 +53,10 @@ function currentDateStamp(): string {
   return new Date().toISOString().slice(0, 10).replaceAll("-", "");
 }
 
+function safeFilename(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 64) || "acquaintance";
+}
+
 function downloadTextFile(filename: string, content: string, mimeType: string): void {
   const blob = new Blob([content], { type: mimeType });
   const url = URL.createObjectURL(blob);
@@ -71,16 +78,18 @@ function formatDate(value?: string): string {
 async function getSelectedContactBundle(): Promise<{
   contact: HumanKeyContact | null;
   credentials: HumanKeyTotpCredential[];
+  lanes: HumanKeyLane[];
   events: HumanKeyEvent[];
 }> {
-  if (!selectedContactId) return { contact: null, credentials: [], events: [] };
+  if (!selectedContactId) return { contact: null, credentials: [], lanes: [], events: [] };
   const contact = await runtime.storage.getContact(selectedContactId);
-  if (!contact) return { contact: null, credentials: [], events: [] };
+  if (!contact) return { contact: null, credentials: [], lanes: [], events: [] };
   const credentials = (await runtime.storage.listCredentialsForContact(contact.id)).filter(
     (credential): credential is HumanKeyTotpCredential => credential.profile === "HK_TOTP_1"
   );
+  const lanes = await runtime.storage.listLanesForContact(contact.id);
   const events = await runtime.storage.listEventsForContact(contact.id);
-  return { contact, credentials, events };
+  return { contact, credentials, lanes, events };
 }
 
 async function renderContactList(): Promise<void> {
@@ -118,7 +127,7 @@ async function renderContactList(): Promise<void> {
 
 async function renderSelectedContact(): Promise<void> {
   const panel = qs<HTMLDivElement>("#selected-contact");
-  const { contact, credentials, events } = await getSelectedContactBundle();
+  const { contact, credentials, lanes, events } = await getSelectedContactBundle();
   currentQrUri = undefined;
 
   if (!contact) {
@@ -180,6 +189,37 @@ async function renderSelectedContact(): Promise<void> {
         </div>
       </div>
 
+      <section class="lane-panel">
+        <div class="section-heading">
+          <div>
+            <h3>Message lanes</h3>
+            <p class="help">V0.6 creates and exchanges lane invites only. It does not send messages or establish a Relationship yet.</p>
+          </div>
+          <span class="pill">HK_LANE_1</span>
+        </div>
+        <div class="grid two">
+          <div>
+            <h4>Inbound lane</h4>
+            <p class="help">Create a receiving boundary for this Acquaintance. Share the invite when you want their app to learn how to send toward you.</p>
+            <div class="button-row">
+              <button id="create-inbound-lane" type="button">Create inbound lane</button>
+              <button id="export-lane-invite" type="button" ${lanes.some((lane) => lane.direction === "inbound" && !lane.lifecycle.revokedAt) ? "" : "disabled"}>Export lane invite</button>
+            </div>
+          </div>
+          <div>
+            <h4>Outbound lane</h4>
+            <p class="help">Import someone else’s lane invite to create a one-way outbound lane toward them.</p>
+            <button id="import-lane-invite-trigger" type="button">Import lane invite</button>
+            <input id="import-lane-invite-file" type="file" accept="application/json,.json" hidden />
+          </div>
+        </div>
+        <dl class="facts lane-facts">
+          <div><dt>Inbound lanes</dt><dd>${lanes.filter((lane) => lane.direction === "inbound" && !lane.lifecycle.revokedAt).length}</dd></div>
+          <div><dt>Outbound lanes</dt><dd>${lanes.filter((lane) => lane.direction === "outbound" && !lane.lifecycle.revokedAt).length}</dd></div>
+          <div><dt>Relationship</dt><dd>Still not established by lane exchange alone</dd></div>
+        </dl>
+      </section>
+
       <h3>HumanKey event spine</h3>
       <ol class="events">
         ${events
@@ -195,10 +235,10 @@ async function renderSelectedContact(): Promise<void> {
     await QRCode.toCanvas(canvas, otpauthUri, { width: 240, margin: 2, errorCorrectionLevel: "M" });
   }
 
-  bindSelectedContactActions(contact, credential);
+  bindSelectedContactActions(contact, credential, lanes);
 }
 
-function bindSelectedContactActions(contact: HumanKeyContact, credential?: HumanKeyTotpCredential): void {
+function bindSelectedContactActions(contact: HumanKeyContact, credential: HumanKeyTotpCredential | undefined, lanes: HumanKeyLane[]): void {
   qs<HTMLButtonElement>("#copy-uri").addEventListener("click", async () => {
     if (!currentQrUri) return;
     await navigator.clipboard.writeText(currentQrUri);
@@ -217,6 +257,53 @@ function bindSelectedContactActions(contact: HumanKeyContact, credential?: Human
     await revokeCredential(runtime, credential.id);
     showNotice("Credential revoked.");
     await render();
+  });
+
+  qs<HTMLButtonElement>("#create-inbound-lane").addEventListener("click", async () => {
+    const result = await createInboundLane(runtime, { contactId: contact.id });
+    downloadTextFile(
+      `${currentDateStamp()}__ABRACADOO__INVITE__HUMANKEY-LANE__V0-6__${safeFilename(contact.displayName)}.json`,
+      JSON.stringify(result.invite, null, 2),
+      "application/json"
+    );
+    showNotice("Inbound lane created and invite downloaded. Relationship is still not established.");
+    await render();
+  });
+
+  qs<HTMLButtonElement>("#export-lane-invite").addEventListener("click", async () => {
+    const inboundLane = lanes
+      .filter((lane) => lane.direction === "inbound" && !lane.lifecycle.revokedAt)
+      .sort((a, b) => b.lifecycle.createdAt.localeCompare(a.lifecycle.createdAt))[0];
+    if (!inboundLane) return;
+    const invite = await recordLaneShared(runtime, inboundLane.id);
+    downloadTextFile(
+      `${currentDateStamp()}__ABRACADOO__INVITE__HUMANKEY-LANE__V0-6__${safeFilename(contact.displayName)}.json`,
+      JSON.stringify(invite, null, 2),
+      "application/json"
+    );
+    showNotice("Lane invite exported and marked shared. Relationship is still not established.");
+    await render();
+  });
+
+  qs<HTMLButtonElement>("#import-lane-invite-trigger").addEventListener("click", () => {
+    qs<HTMLInputElement>("#import-lane-invite-file").click();
+  });
+
+  qs<HTMLInputElement>("#import-lane-invite-file").addEventListener("change", async (event) => {
+    const input = event.currentTarget as HTMLInputElement;
+    const file = input.files?.[0];
+    if (!file) return;
+
+    try {
+      const invite = JSON.parse(await file.text()) as unknown;
+      await importLaneInvite(runtime, { contactId: contact.id, invite });
+      showNotice("Lane invite imported as an outbound lane. Relationship is still not established.");
+      await render();
+    } catch (error) {
+      showNotice(friendlyErrorMessage(error));
+    } finally {
+      input.value = "";
+    }
   });
 
   qs<HTMLFormElement>("#verify-form").addEventListener("submit", async (event) => {
@@ -339,7 +426,7 @@ async function bindBackupActions(): Promise<void> {
       const backupPassphrase = askBackupPassphrase("export");
       const backup = await exportEncryptedHumanKeyBackup(runtime, backupPassphrase);
       await selfCheckEncryptedBackup(backup, backupPassphrase);
-      const filename = `${currentDateStamp()}__ABRACADOO__BACKUP__HUMANKEY-LOCAL__V0-5-1__encrypted.json`;
+      const filename = `${currentDateStamp()}__ABRACADOO__BACKUP__HUMANKEY-LOCAL__V0-6__encrypted.json`;
       downloadTextFile(filename, JSON.stringify(backup, null, 2), "application/json");
       showNotice("Encrypted HumanKey backup exported and self-checked.");
     } catch (error) {

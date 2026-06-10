@@ -91,6 +91,7 @@ export type HumanKeyEventType =
   | "credential.revoked"
   | "lane.created"
   | "lane.shared"
+  | "lane.imported"
   | "message.sent"
   | "message.received"
   | "loop.completed"

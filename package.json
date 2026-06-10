@@ -1,6 +1,6 @@
 {
   "name": "abracadoo-humankey-seed",
-  "version": "0.0.5-2",
+  "version": "0.0.6",
   "private": true,
   "type": "module",
   "scripts": {

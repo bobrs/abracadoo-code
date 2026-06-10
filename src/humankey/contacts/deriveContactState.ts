@@ -9,7 +9,7 @@ export function deriveContactState(contact: HumanKeyContact, events: HumanKeyEve
   if (hasEvent(events, "contact.archived")) return "archived";
   if (hasEvent(events, "relationship.established")) return "relationship";
   if (hasEvent(events, "loop.completed")) return "loop_witnessed";
-  if (hasEvent(events, "lane.shared")) return "loop_offered";
+  if (hasEvent(events, "lane.shared") || hasEvent(events, "lane.imported")) return "loop_offered";
   if (contact.credentialIds.length > 0 || contact.laneIds.length > 0) return "acquaintance";
   return "draft";
 }

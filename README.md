@@ -113,6 +113,12 @@ V0.5.1 keeps the V0.5 encrypted-vault architecture and adds a small confidence/p
 
 The orange label is a UI cue only; the HumanKey contact state remains `acquaintance`.
 
+## V0.6 lane invite model
+
+V0.6 adds the first app-native lane shape without implementing message delivery yet. You can create an inbound `HK_LANE_1` lane for an Acquaintance, export a public lane invite, and import someone else’s lane invite as an outbound lane. Lane exchange records HumanKey events and may move an Acquaintance into `loop_offered`, but it does not establish a Relationship.
+
+Relationship remains gated on a future completed reciprocal app-native loop.
+
 ## V0.5.2: temporary Cloudflare lockfile hygiene
 
 V0.5.2 removes `package-lock.json` from the scaffold and adds `.npmrc` with `package-lock=false` so Cloudflare Pages does not hang on the current lockfile path.
