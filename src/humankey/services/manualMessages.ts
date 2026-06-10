@@ -1,7 +1,17 @@
 import type { AbracadooRuntime } from "../../runtime/AbracadooRuntime";
 import { deriveContactState } from "../contacts/deriveContactState";
 import { createHumanKeyEvent } from "../events/createEvent";
-import type { HumanKeyContact, HumanKeyEvent, HumanKeyPath, MessageId, PathId } from "../model/types";
+import type {
+  HumanKeyContact,
+  HumanKeyEvent,
+  HumanKeyLoopWitness,
+  HumanKeyPath,
+  LoopId,
+  LoopWitnessId,
+  MessageId,
+  PathId,
+  SecretRef,
+} from "../model/types";
 
 export type ManualMessageArtifact = {
   schema: "ABRACADOO_HUMANKEY_MANUAL_MESSAGE";
@@ -19,6 +29,25 @@ export type ManualMessageArtifact = {
       iv: string;
       ciphertext: string;
     };
+  };
+  proof?: {
+    mode: "none" | "abracadabracadoo_core" | "conditional_deniability";
+  };
+  witness?: {
+    loopId?: string;
+    payloadHash?: string;
+    witnessPolicy?: string;
+  };
+  controlledVerifiability?: {
+    sigBlockRef?: string;
+    sigBlockDisclosure?: "absent" | "withheld" | "disclosed";
+  };
+  deniability?: {
+    recipientProofMode?: "none" | "reserved";
+    recipientProofRef?: string;
+  };
+  timeProfile?: {
+    mode: "wall_clock_totp" | "loop_local_epoch_reserved";
   };
 };
 
@@ -114,6 +143,113 @@ function isVaultLockedError(error: unknown): boolean {
   return message.includes("vault is locked") || message.includes("unlock it before using secret material");
 }
 
+function eventDataString(event: HumanKeyEvent, key: string): string | undefined {
+  const value = event.data?.[key];
+  return typeof value === "string" ? value : undefined;
+}
+
+function makeLoopId(contactId: string, inboundPathId: string | undefined, outboundPathId: string | undefined): LoopId {
+  return `loop:${contactId}:${inboundPathId ?? "unknown-inbound"}:${outboundPathId ?? "unknown-outbound"}` as LoopId;
+}
+
+function makeLoopWitnessId(runtime: AbracadooRuntime): LoopWitnessId {
+  return runtime.crypto.randomId() as LoopWitnessId;
+}
+
+function pushDefined(values: string[], value: string | undefined): void {
+  if (value) values.push(value);
+}
+
+function loopWitnessMatches(
+  loopWitness: HumanKeyLoopWitness,
+  sentEvent: HumanKeyEvent,
+  receivedEvent: HumanKeyEvent
+): boolean {
+  return (
+    loopWitness.basis === "manual_message_exchange" &&
+    loopWitness.scope === "path_pair" &&
+    loopWitness.outboundPathId === sentEvent.pathId &&
+    loopWitness.inboundPathId === receivedEvent.pathId &&
+    loopWitness.evidence.sentMessageId === eventDataString(sentEvent, "messageId") &&
+    loopWitness.evidence.receivedMessageId === eventDataString(receivedEvent, "messageId") &&
+    loopWitness.evidence.sentArtifactDigest === eventDataString(sentEvent, "artifactDigest") &&
+    loopWitness.evidence.receivedArtifactDigest === eventDataString(receivedEvent, "artifactDigest")
+  );
+}
+
+async function createLoopWitness(
+  runtime: AbracadooRuntime,
+  contact: HumanKeyContact,
+  sentEvent: HumanKeyEvent,
+  receivedEvent: HumanKeyEvent,
+  witnessedAt: string
+): Promise<HumanKeyLoopWitness> {
+  const inboundPath = receivedEvent.pathId ? await runtime.storage.getPath(receivedEvent.pathId) : null;
+  const outboundPath = sentEvent.pathId ? await runtime.storage.getPath(sentEvent.pathId) : null;
+  const outboundReceivePublicKey =
+    outboundPath?.transport.kind === "local" ? outboundPath.transport.receivePublicKeyJwk : undefined;
+
+  const artifactDigests: string[] = [];
+  pushDefined(artifactDigests, eventDataString(sentEvent, "artifactDigest"));
+  pushDefined(artifactDigests, eventDataString(receivedEvent, "artifactDigest"));
+
+  const ciphertextDigests: string[] = [];
+  pushDefined(ciphertextDigests, eventDataString(sentEvent, "ciphertextDigest"));
+  pushDefined(ciphertextDigests, eventDataString(receivedEvent, "ciphertextDigest"));
+
+  const localParticipant: { inboundPathId?: PathId; pathKeyRef?: SecretRef } = {};
+  if (receivedEvent.pathId) localParticipant.inboundPathId = receivedEvent.pathId;
+  if (inboundPath?.secretRef) localParticipant.pathKeyRef = inboundPath.secretRef;
+
+  const remoteParticipant: { outboundPathId?: PathId; remotePathId?: PathId; receivePublicKeyDigest?: string } = {};
+  if (sentEvent.pathId) remoteParticipant.outboundPathId = sentEvent.pathId;
+  if (outboundPath?.remotePathId) remoteParticipant.remotePathId = outboundPath.remotePathId;
+  if (outboundReceivePublicKey) remoteParticipant.receivePublicKeyDigest = await sha256Base64(outboundReceivePublicKey);
+
+  const evidence: HumanKeyLoopWitness["evidence"] = {};
+  const sentMessageId = eventDataString(sentEvent, "messageId");
+  const receivedMessageId = eventDataString(receivedEvent, "messageId");
+  const sentArtifactDigest = eventDataString(sentEvent, "artifactDigest");
+  const receivedArtifactDigest = eventDataString(receivedEvent, "artifactDigest");
+  const sentCiphertextDigest = eventDataString(sentEvent, "ciphertextDigest");
+  const receivedCiphertextDigest = eventDataString(receivedEvent, "ciphertextDigest");
+  if (sentMessageId) evidence.sentMessageId = sentMessageId;
+  if (receivedMessageId) evidence.receivedMessageId = receivedMessageId;
+  if (sentArtifactDigest) evidence.sentArtifactDigest = sentArtifactDigest;
+  if (receivedArtifactDigest) evidence.receivedArtifactDigest = receivedArtifactDigest;
+  if (sentCiphertextDigest) evidence.sentCiphertextDigest = sentCiphertextDigest;
+  if (receivedCiphertextDigest) evidence.receivedCiphertextDigest = receivedCiphertextDigest;
+
+  const loopWitnessId = makeLoopWitnessId(runtime);
+  return {
+    id: loopWitnessId,
+    schema: "ABRACADOO_LOOP_WITNESS",
+    schemaVersion: 1,
+    loopWitnessId,
+    loopId: makeLoopId(contact.id, receivedEvent.pathId, sentEvent.pathId),
+    basis: "manual_message_exchange",
+    scope: "path_pair",
+    contactId: contact.id,
+    ...(receivedEvent.pathId ? { inboundPathId: receivedEvent.pathId } : {}),
+    ...(sentEvent.pathId ? { outboundPathId: sentEvent.pathId } : {}),
+    participants: {
+      local: localParticipant,
+      remote: remoteParticipant,
+    },
+    evidence,
+    payloadHashes: {
+      artifactDigests,
+      ciphertextDigests,
+    },
+    witnessedAt,
+    witnessRole: "log",
+    consentFlags: {
+      explicitConsentConfirmation: "not_claimed",
+      consentToContents: "not_claimed",
+    },
+  };
+}
+
 async function deriveAesKeyFromSender(otherPublicJwk: JsonWebKey): Promise<{ key: CryptoKey; ephemeralPublicJwk: JsonWebKey }> {
   const otherPublicKey = await crypto.subtle.importKey(
     "jwk",
@@ -203,43 +339,68 @@ async function saveContactWithDerivedState(runtime: AbracadooRuntime, contact: H
 
 async function witnessLoopIfReady(runtime: AbracadooRuntime, contact: HumanKeyContact): Promise<{ contact: HumanKeyContact; loopCompleted: boolean; relationshipEstablished: boolean }> {
   const events = await runtime.storage.listEventsForContact(contact.id);
-  const hasSent = events.some((event) => event.type === "message.sent");
-  const hasReceived = events.some((event) => event.type === "message.received");
-  const existingLoopEvent = events.find((event) => event.type === "loop.completed");
-  const hasRelationshipEstablished = events.some((event) => event.type === "relationship.established");
+  const sentEvent = events.find((event) => event.type === "message.sent");
+  const receivedEvent = events.find((event) => event.type === "message.received");
 
-  if (!hasSent || !hasReceived) {
+  if (!sentEvent || !receivedEvent) {
     return { contact: await saveContactWithDerivedState(runtime, contact), loopCompleted: false, relationshipEstablished: false };
   }
 
   const nowIso = runtime.clock.nowIso();
-  const addedEvents: HumanKeyEvent[] = [];
-  let loopEventId = existingLoopEvent?.id;
+  const existingLoopWitness = (await runtime.storage.listLoopWitnessesForContact(contact.id)).find((loopWitness) =>
+    loopWitnessMatches(loopWitness, sentEvent, receivedEvent)
+  );
+  const loopWitness = existingLoopWitness ?? (await createLoopWitness(runtime, contact, sentEvent, receivedEvent, nowIso));
+  if (!existingLoopWitness) {
+    await runtime.storage.saveLoopWitness(loopWitness);
+  }
 
-  if (!existingLoopEvent) {
+  const hasLoopCompleted = events.some(
+    (event) =>
+      event.type === "loop.completed" &&
+      (eventDataString(event, "loopWitnessId") === loopWitness.loopWitnessId ||
+        (!eventDataString(event, "loopWitnessId") && eventDataString(event, "basis") === "manual_message_exchange"))
+  );
+  const hasRelationshipEstablished = events.some(
+    (event) =>
+      event.type === "relationship.established" &&
+      (eventDataString(event, "loopWitnessId") === loopWitness.loopWitnessId ||
+        (!eventDataString(event, "loopWitnessId") && eventDataString(event, "basis") !== undefined))
+  );
+  const addedEvents: HumanKeyEvent[] = [];
+
+  if (!hasLoopCompleted) {
     const loopEvent = createHumanKeyEvent({
       contactId: contact.id,
       type: "loop.completed",
       nowIso,
       data: {
         basis: "manual_message_exchange",
-        witnessScope: "contact_level",
+        witnessScope: "path_pair",
+        loopWitnessId: loopWitness.loopWitnessId,
+        loopId: loopWitness.loopId,
+        inboundPathId: loopWitness.inboundPathId,
+        outboundPathId: loopWitness.outboundPathId,
         messageSent: true,
         messageReceived: true,
       },
     });
     await runtime.storage.appendEvent(loopEvent);
     addedEvents.push(loopEvent);
-    loopEventId = loopEvent.id;
   }
 
   if (!hasRelationshipEstablished) {
-    if (!loopEventId) throw new Error("Loop witness is missing a loop event id.");
     const relationshipEvent = createHumanKeyEvent({
       contactId: contact.id,
       type: "relationship.established",
       nowIso,
-      data: { basis: "witnessed_loop", witnessScope: "contact_level", loopEventId },
+      data: {
+        basis: "witnessed_manual_loop",
+        loopWitnessId: loopWitness.loopWitnessId,
+        loopId: loopWitness.loopId,
+        explicitConsentConfirmation: "absent",
+        consentToContents: false,
+      },
     });
     await runtime.storage.appendEvent(relationshipEvent);
     addedEvents.push(relationshipEvent);
@@ -321,6 +482,10 @@ export async function createManualMessage(
         ciphertext: bytesToBase64(new Uint8Array(ciphertext)),
       },
     },
+    proof: { mode: "none" },
+    controlledVerifiability: { sigBlockDisclosure: "absent" },
+    deniability: { recipientProofMode: "none" },
+    timeProfile: { mode: "wall_clock_totp" },
   };
 
   const event = createHumanKeyEvent({
@@ -333,7 +498,7 @@ export async function createManualMessage(
       messageId,
       encrypted: true,
       artifactDigest: await sha256Base64(artifact),
-      plaintextLength: input.plaintext.length,
+      ciphertextDigest: await sha256Base64(artifact.message.encryption.ciphertext),
     },
   });
   await runtime.storage.appendEvent(event);
@@ -400,8 +565,7 @@ export async function importManualMessage(
       messageId: input.artifact.message.id,
       encrypted: true,
       artifactDigest: await sha256Base64(input.artifact),
-      plaintextLength: plaintext.length,
-      plaintextSha256: await sha256Base64(plaintext),
+      ciphertextDigest: await sha256Base64(input.artifact.message.encryption.ciphertext),
     },
   });
 

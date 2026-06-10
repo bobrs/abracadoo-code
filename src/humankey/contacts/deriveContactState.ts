@@ -6,6 +6,7 @@ function hasEvent(events: HumanKeyEvent[], type: HumanKeyEvent["type"]): boolean
 
 export function deriveContactState(contact: HumanKeyContact, events: HumanKeyEvent[]): HumanKeyContactState {
   if (hasEvent(events, "contact.revoked")) return "revoked";
+  if (hasEvent(events, "contact.forgotten")) return "forgotten";
   if (hasEvent(events, "contact.archived")) return "archived";
   if (hasEvent(events, "relationship.established")) return "relationship";
   if (hasEvent(events, "loop.completed")) return "loop_witnessed";

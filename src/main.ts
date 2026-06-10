@@ -97,8 +97,11 @@ function friendlyEventLabel(type: HumanKeyEvent["type"]): string {
     "message.sent": "Message sent",
     "message.received": "Message received",
     "loop.completed": "Loop completed",
-    "relationship.established": "Relationship established",
+    "relationship.established": "Relationship established by witnessed loop",
+    "consent.confirmed": "Consent confirmed",
+    "message.consent_confirmed": "Message consent confirmed",
     "contact.revoked": "Acquaintance revoked",
+    "contact.forgotten": "Acquaintance forgotten locally",
     "contact.archived": "Acquaintance archived",
   };
   return labels[type];
@@ -113,8 +116,8 @@ function renderLoopStatus(events: HumanKeyEvent[], contact: HumanKeyContact): st
   if (hasRelationshipEstablished || contact.state === "relationship") {
     return `
       <div class="loop-status relationship-status">
-        <strong>Relationship established</strong>
-        <p>A Loop has been witnessed for this Acquaintance. Trust flows in loops, one loop at a time.</p>
+        <strong>Relationship established by witnessed loop</strong>
+        <p>A Loop was witnessed for this Acquaintance. This means reciprocal exchange was observed. It does not mean agreement or consent to message contents.</p>
       </div>
     `;
   }
@@ -255,7 +258,7 @@ async function renderSelectedContact(): Promise<void> {
             <div><dt>Created</dt><dd>${formatDate(contact.createdAt)}</dd></div>
             <div><dt>Last verified</dt><dd>${formatDate(credential?.lifecycle.lastVerifiedAt)}</dd></div>
             <div><dt>Revoked</dt><dd>${formatDate(credential?.lifecycle.revokedAt)}</dd></div>
-            <div><dt>Relationship</dt><dd>${contact.state === "relationship" ? "Established" : "Not established"}</dd></div>
+          <div><dt>Relationship</dt><dd>${contact.state === "relationship" ? "Established by witnessed loop" : "Not established"}</dd></div>
           </dl>
           <p class="help status-note">Authentication proves possession. Messaging proves a living channel. Relationship requires a completed loop.</p>
         </div>
@@ -630,7 +633,7 @@ async function bindBackupActions(): Promise<void> {
       const result = await importHumanKeyBackup(runtime, backup);
       selectedContactId = undefined;
       showNotice(
-        `Imported ${result.contactsImported} contacts, ${result.credentialsImported} credentials, ${result.pathsImported} paths, and ${result.eventsImported} events.`
+        `Imported ${result.contactsImported} contacts, ${result.credentialsImported} credentials, ${result.pathsImported} paths, ${result.loopWitnessesImported} loop witnesses, and ${result.eventsImported} events.`
       );
       await render();
     } catch (error) {

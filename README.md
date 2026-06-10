@@ -57,6 +57,8 @@ The browser runtime uses `EncryptedIndexedDbSecretVault`. Active TOTP secrets an
 
 Backups are encrypted, passphrase-wrapped JSON by default. Older plaintext backup shapes are still accepted for compatibility and restored through the vault boundary.
 
+Restoring an older encrypted backup may restore keys or records that were later deleted or forgotten locally.
+
 ## Architecture pass V0.2
 
 V0.2 added the runtime/adapters layer so the same HumanKey domain model can run locally, against a server, through Nostr, or through manual offline exchange.
@@ -157,3 +159,15 @@ V0.7.1 keeps the V0.7 architecture and makes the first Loop clearer and less sur
 - the UI shows friendly event labels and a selected-Acquaintance Loop / Relationship status area
 
 The witness remains a coarse contact-level Loop witness. Path-pair-specific Loop modeling is a future improvement, not part of this confidence pass.
+
+## V0.7.2: Witness & forgetting alignment
+
+V0.7.2 adds local `ABRACADOO_LOOP_WITNESS` records. A `loop.completed` event now references the local `loopWitnessId`, and new `relationship.established` events identify the basis as `witnessed_manual_loop`.
+
+Relationship remains an Abracadoo.app witnessed-loop state. It means reciprocal manual exchange was observed. It does not mean agreement, legal consent, durable identity, public trust, emotional closeness, or consent to message contents.
+
+Explicit consent confirmation is reserved for a later layer through event names such as `consent.confirmed` and `message.consent_confirmed`; it is not required for the current app-profile Relationship state.
+
+Manual messages remain `HK_MANUAL_MESSAGE_1` / Abracadoo.app profile artifacts. Optional envelope reservations exist for future proof, witness, controlled-verifiability, deniability, and time-profile layers, but V0.7.2 does not implement full Abracadabracadoo core proof artifacts.
+
+Public/broadcast/listening Paths, image/photo/QR carriers, TIS export, server transport, Nostr transport, conditional deniability crypto, and subjective-epoch TOTP remain out of scope for this pass.

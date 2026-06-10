@@ -5,7 +5,9 @@ import type {
   HumanKeyContact,
   HumanKeyCredential,
   HumanKeyEvent,
+  HumanKeyLoopWitness,
   HumanKeyPath,
+  LoopWitnessId,
   PathId,
 } from "../../humankey/model/types";
 import type { StorageAdapter } from "./StorageAdapter";
@@ -19,6 +21,7 @@ export class InMemoryStorageAdapter implements StorageAdapter {
   private readonly credentials = new Map<CredentialId, HumanKeyCredential>();
   private readonly paths = new Map<PathId, HumanKeyPath>();
   private readonly events = new Map<EventId, HumanKeyEvent>();
+  private readonly loopWitnesses = new Map<LoopWitnessId, HumanKeyLoopWitness>();
 
   async getContact(id: ContactId): Promise<HumanKeyContact | null> {
     const contact = this.contacts.get(id);
@@ -73,5 +76,21 @@ export class InMemoryStorageAdapter implements StorageAdapter {
 
   async appendEvent(event: HumanKeyEvent): Promise<void> {
     this.events.set(event.id, clone(event));
+  }
+
+  async getLoopWitness(id: LoopWitnessId): Promise<HumanKeyLoopWitness | null> {
+    const loopWitness = this.loopWitnesses.get(id);
+    return loopWitness ? clone(loopWitness) : null;
+  }
+
+  async listLoopWitnessesForContact(contactId: ContactId): Promise<HumanKeyLoopWitness[]> {
+    return [...this.loopWitnesses.values()]
+      .filter((loopWitness) => loopWitness.contactId === contactId)
+      .sort((first, second) => first.witnessedAt.localeCompare(second.witnessedAt))
+      .map(clone);
+  }
+
+  async saveLoopWitness(loopWitness: HumanKeyLoopWitness): Promise<void> {
+    this.loopWitnesses.set(loopWitness.id, clone(loopWitness));
   }
 }

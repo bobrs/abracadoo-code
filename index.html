@@ -30,6 +30,9 @@
           <p class="help">
             Active TOTP secrets are encrypted in local browser storage after unlock. Encrypted backups are passphrase-wrapped JSON.
           </p>
+          <p class="help">
+            Restoring an older encrypted backup may restore keys or records that were later deleted or forgotten locally.
+          </p>
           <label class="vault-passphrase-label">
             Vault passphrase
             <input id="vault-passphrase" type="password" autocomplete="current-password" placeholder="Set or unlock local vault" />

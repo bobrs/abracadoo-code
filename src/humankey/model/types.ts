@@ -4,6 +4,8 @@ export type CredentialId = string;
 export type PathId = string;
 export type EventId = string;
 export type MessageId = string;
+export type LoopWitnessId = string;
+export type LoopId = string;
 export type SecretRef = string;
 
 export type HumanKeyContactState =
@@ -14,6 +16,7 @@ export type HumanKeyContactState =
   | "relationship"
   | "paused"
   | "revoked"
+  | "forgotten"
   | "archived";
 
 export type CredentialDirection = "i_verify_them" | "they_verify_me";
@@ -88,6 +91,48 @@ export type HumanKeyPath = {
   };
 };
 
+export type HumanKeyLoopWitness = {
+  id: LoopWitnessId;
+  schema: "ABRACADOO_LOOP_WITNESS";
+  schemaVersion: 1;
+  loopWitnessId: LoopWitnessId;
+  loopId: LoopId;
+  basis: "manual_message_exchange";
+  scope: "path_pair";
+  contactId: ContactId;
+  inboundPathId?: PathId;
+  outboundPathId?: PathId;
+  participants: {
+    local: {
+      inboundPathId?: PathId;
+      pathKeyRef?: SecretRef;
+    };
+    remote: {
+      outboundPathId?: PathId;
+      remotePathId?: PathId;
+      receivePublicKeyDigest?: string;
+    };
+  };
+  evidence: {
+    sentMessageId?: MessageId;
+    receivedMessageId?: MessageId;
+    sentArtifactDigest?: string;
+    receivedArtifactDigest?: string;
+    sentCiphertextDigest?: string;
+    receivedCiphertextDigest?: string;
+  };
+  payloadHashes: {
+    artifactDigests: string[];
+    ciphertextDigests: string[];
+  };
+  witnessedAt: IsoTimestamp;
+  witnessRole: "log" | "verifier";
+  consentFlags: {
+    explicitConsentConfirmation: "not_claimed";
+    consentToContents: "not_claimed";
+  };
+};
+
 export type HumanKeyEventType =
   | "contact.created"
   | "contact.state_changed"
@@ -107,7 +152,12 @@ export type HumanKeyEventType =
   | "message.received"
   | "loop.completed"
   | "relationship.established"
+  // Reserved for a later explicit-consent layer. Delivery, receipt, Loop witness,
+  // and Relationship status do not imply consent to contents.
+  | "consent.confirmed"
+  | "message.consent_confirmed"
   | "contact.revoked"
+  | "contact.forgotten"
   | "contact.archived";
 
 export type HumanKeyEvent = {

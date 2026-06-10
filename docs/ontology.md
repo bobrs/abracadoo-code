@@ -8,9 +8,11 @@ In the MVP, creating an Authenticator-compatible TOTP credential for someone cre
 
 ## Relationship
 
-A Relationship is a HumanKey contact with at least one completed reciprocal app-native loop, such as a successful two-way message exchange.
+A Relationship is an Abracadoo.app profile state for a HumanKey contact with at least one witnessed reciprocal app-native loop, such as a successful two-way manual message exchange.
 
 Authentication proves possession. Messaging proves a living channel. Relationship requires a completed loop.
+
+Relationship does not mean agreement, legal consent, durable identity, public trust, emotional closeness, or consent to message contents. Explicit consent confirmation is a later layer.
 
 ## Directionality
 

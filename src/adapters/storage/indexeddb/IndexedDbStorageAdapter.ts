@@ -5,7 +5,9 @@ import type {
   HumanKeyContact,
   HumanKeyCredential,
   HumanKeyEvent,
+  HumanKeyLoopWitness,
   HumanKeyPath,
+  LoopWitnessId,
   PathId,
 } from "../../../humankey/model/types";
 import type { StorageAdapter } from "../StorageAdapter";
@@ -72,5 +74,17 @@ export class IndexedDbStorageAdapter implements StorageAdapter {
 
   appendEvent(event: HumanKeyEvent): Promise<void> {
     return putRecord("events", event);
+  }
+
+  getLoopWitness(id: LoopWitnessId): Promise<HumanKeyLoopWitness | null> {
+    return getRecord<HumanKeyLoopWitness>("loopWitnesses", id);
+  }
+
+  listLoopWitnessesForContact(contactId: ContactId): Promise<HumanKeyLoopWitness[]> {
+    return getAllByContactId<HumanKeyLoopWitness>("loopWitnesses", contactId);
+  }
+
+  saveLoopWitness(loopWitness: HumanKeyLoopWitness): Promise<void> {
+    return putRecord("loopWitnesses", loopWitness);
   }
 }

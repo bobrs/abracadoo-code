@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { createLocalRuntime } from "../../../runtime/createLocalRuntime";
+import { createHumanKeyContact } from "../../contacts/createContact";
+import { deriveContactState } from "../../contacts/deriveContactState";
+import { createHumanKeyEvent } from "../../events/createEvent";
 import {
   createAcquaintanceWithTotp,
   createInboundPath,
@@ -83,7 +86,7 @@ async function createManualExchangePair() {
   const bobOutbound = await importPathInvite(bobRuntime, { contactId: bobViewOfAlice.contact.id, invite: aliceInvite });
   const aliceOutbound = await importPathInvite(aliceRuntime, { contactId: aliceViewOfBob.contact.id, invite: bobInvite });
 
-  return { aliceRuntime, bobRuntime, aliceViewOfBob, bobViewOfAlice, aliceOutbound, bobOutbound };
+  return { aliceRuntime, bobRuntime, aliceViewOfBob, bobViewOfAlice, aliceInbound, bobInbound, aliceOutbound, bobOutbound };
 }
 
 function countEvents(events: HumanKeyEvent[], type: HumanKeyEvent["type"]): number {
@@ -278,7 +281,7 @@ describe("HumanKey Acquaintance HK_TOTP_1", () => {
   });
 
   it("exchanges encrypted manual messages and establishes a Relationship after a witnessed Loop", async () => {
-    const { aliceRuntime, bobRuntime, aliceViewOfBob, bobViewOfAlice, aliceOutbound, bobOutbound } = await createManualExchangePair();
+    const { aliceRuntime, bobRuntime, aliceViewOfBob, bobViewOfAlice, aliceInbound, aliceOutbound, bobOutbound } = await createManualExchangePair();
 
     const aliceMessageText = "Hello Bob. This crossed a manual path.";
     const bobMessageText = "Hello Alice. Loop witnessed.";
@@ -319,6 +322,39 @@ describe("HumanKey Acquaintance HK_TOTP_1", () => {
     let aliceEvents = await aliceRuntime.storage.listEventsForContact(aliceViewOfBob.contact.id);
     expect(countEvents(aliceEvents, "loop.completed")).toBe(1);
     expect(countEvents(aliceEvents, "relationship.established")).toBe(1);
+    expect(JSON.stringify(aliceEvents)).not.toContain("plaintextSha256");
+    expect(JSON.stringify(aliceEvents)).not.toContain("plaintextLength");
+
+    let aliceLoopWitnesses = await aliceRuntime.storage.listLoopWitnessesForContact(aliceViewOfBob.contact.id);
+    expect(aliceLoopWitnesses).toHaveLength(1);
+    const aliceLoopWitness = aliceLoopWitnesses[0]!;
+    expect(aliceLoopWitness.schema).toBe("ABRACADOO_LOOP_WITNESS");
+    expect(aliceLoopWitness.basis).toBe("manual_message_exchange");
+    expect(aliceLoopWitness.scope).toBe("path_pair");
+    expect(aliceLoopWitness.inboundPathId).toBe(aliceInbound.path.id);
+    expect(aliceLoopWitness.outboundPathId).toBe(aliceOutbound.path.id);
+    expect(aliceLoopWitness.evidence.sentMessageId).toBe(aliceMessage.artifact.message.id);
+    expect(aliceLoopWitness.evidence.receivedMessageId).toBe(bobMessage.artifact.message.id);
+    expect(aliceLoopWitness.evidence.sentArtifactDigest).toBeDefined();
+    expect(aliceLoopWitness.evidence.receivedArtifactDigest).toBeDefined();
+    expect(aliceLoopWitness.evidence.sentCiphertextDigest).toBeDefined();
+    expect(aliceLoopWitness.evidence.receivedCiphertextDigest).toBeDefined();
+    expect(aliceLoopWitness.payloadHashes.artifactDigests).toHaveLength(2);
+    expect(aliceLoopWitness.payloadHashes.ciphertextDigests).toHaveLength(2);
+    expect(JSON.stringify(aliceLoopWitness)).not.toContain("plaintext");
+
+    const loopEvent = aliceEvents.find((event) => event.type === "loop.completed");
+    const relationshipEvent = aliceEvents.find((event) => event.type === "relationship.established");
+    expect(loopEvent?.data).toMatchObject({
+      loopWitnessId: aliceLoopWitness.loopWitnessId,
+      witnessScope: "path_pair",
+    });
+    expect(relationshipEvent?.data).toMatchObject({
+      basis: "witnessed_manual_loop",
+      loopWitnessId: aliceLoopWitness.loopWitnessId,
+      explicitConsentConfirmation: "absent",
+      consentToContents: false,
+    });
 
     await createManualMessage(aliceRuntime, {
       contactId: aliceViewOfBob.contact.id,
@@ -331,8 +367,10 @@ describe("HumanKey Acquaintance HK_TOTP_1", () => {
     });
 
     aliceEvents = await aliceRuntime.storage.listEventsForContact(aliceViewOfBob.contact.id);
+    aliceLoopWitnesses = await aliceRuntime.storage.listLoopWitnessesForContact(aliceViewOfBob.contact.id);
     expect(countEvents(aliceEvents, "loop.completed")).toBe(1);
     expect(countEvents(aliceEvents, "relationship.established")).toBe(1);
+    expect(aliceLoopWitnesses).toHaveLength(1);
   });
 
   it("exports and imports inbound path receive keys so manual messages still decrypt", async () => {
@@ -376,6 +414,101 @@ describe("HumanKey Acquaintance HK_TOTP_1", () => {
     expect(restoredPaths.some((path) => path.secretRef)).toBe(true);
     expect(vault.created.map((secret) => secret.purpose)).toContain("HK_TOTP_1");
     expect(vault.created.map((secret) => secret.purpose)).toContain("HK_PATH_1_RECEIVE_KEY");
+  });
+
+  it("exports and imports LoopWitness records in backups", async () => {
+    const { aliceRuntime, bobRuntime, aliceViewOfBob, bobViewOfAlice, aliceOutbound, bobOutbound } = await createManualExchangePair();
+
+    const aliceMessage = await createManualMessage(aliceRuntime, {
+      contactId: aliceViewOfBob.contact.id,
+      outboundPathId: aliceOutbound.path.id,
+      plaintext: "Backup should carry this witness.",
+    });
+    const bobMessage = await createManualMessage(bobRuntime, {
+      contactId: bobViewOfAlice.contact.id,
+      outboundPathId: bobOutbound.path.id,
+      plaintext: "And this side completes it.",
+    });
+    await importManualMessage(aliceRuntime, {
+      contactId: aliceViewOfBob.contact.id,
+      artifact: bobMessage.artifact,
+    });
+    await importManualMessage(bobRuntime, {
+      contactId: bobViewOfAlice.contact.id,
+      artifact: aliceMessage.artifact,
+    });
+
+    const backup = await exportHumanKeyBackup(aliceRuntime);
+    expect(backup.loopWitnesses).toHaveLength(1);
+
+    const restoredRuntime = createLocalRuntime();
+    const result = await importHumanKeyBackup(restoredRuntime, backup);
+    const restoredLoopWitnesses = await restoredRuntime.storage.listLoopWitnessesForContact(aliceViewOfBob.contact.id);
+    expect(result.loopWitnessesImported).toBe(1);
+    expect(restoredLoopWitnesses).toEqual(backup.loopWitnesses);
+  });
+
+  it("keeps manual message artifact imports backward-compatible with reserved envelope fields", async () => {
+    const { aliceRuntime, bobRuntime, aliceViewOfBob, bobViewOfAlice, bobOutbound } = await createManualExchangePair();
+    const bobMessage = await createManualMessage(bobRuntime, {
+      contactId: bobViewOfAlice.contact.id,
+      outboundPathId: bobOutbound.path.id,
+      plaintext: "Reserved fields should not change import.",
+    });
+
+    expect(bobMessage.artifact.schemaVersion).toBe(1);
+    expect(bobMessage.artifact.proof).toMatchObject({ mode: "none" });
+    expect(bobMessage.artifact.timeProfile).toMatchObject({ mode: "wall_clock_totp" });
+
+    const oldArtifact = structuredClone(bobMessage.artifact);
+    delete oldArtifact.proof;
+    delete oldArtifact.witness;
+    delete oldArtifact.controlledVerifiability;
+    delete oldArtifact.deniability;
+    delete oldArtifact.timeProfile;
+
+    const oldImport = await importManualMessage(aliceRuntime, {
+      contactId: aliceViewOfBob.contact.id,
+      artifact: oldArtifact,
+    });
+    expect(oldImport.plaintext).toBe("Reserved fields should not change import.");
+
+    const reservedArtifact = structuredClone(bobMessage.artifact);
+    reservedArtifact.proof = { mode: "conditional_deniability" };
+    reservedArtifact.witness = { loopId: "reserved-loop", payloadHash: "reserved-payload", witnessPolicy: "reserved" };
+    reservedArtifact.controlledVerifiability = { sigBlockRef: "reserved-sig", sigBlockDisclosure: "withheld" };
+    reservedArtifact.deniability = { recipientProofMode: "reserved", recipientProofRef: "reserved-proof" };
+    reservedArtifact.timeProfile = { mode: "loop_local_epoch_reserved" };
+
+    const reservedImport = await importManualMessage(aliceRuntime, {
+      contactId: aliceViewOfBob.contact.id,
+      artifact: reservedArtifact,
+    });
+    expect(reservedImport.plaintext).toBe("Reserved fields should not change import.");
+  });
+
+  it("keeps forgotten lifecycle semantics local without claiming global erasure", () => {
+    const contact = createHumanKeyContact("Local copy", undefined, {
+      nowIso: "2026-06-10T00:00:00.000Z",
+      randomId: "contact-forgotten",
+    });
+    const forgotten = createHumanKeyEvent({
+      contactId: contact.id,
+      type: "contact.forgotten",
+      nowIso: "2026-06-10T00:00:01.000Z",
+      randomId: "event-forgotten",
+      data: {
+        scope: "local_device",
+        globalErasureClaim: false,
+        backupRestoreMayReintroduce: true,
+      },
+    });
+
+    expect(deriveContactState(contact, [forgotten])).toBe("forgotten");
+    expect(forgotten.data).toMatchObject({
+      globalErasureClaim: false,
+      backupRestoreMayReintroduce: true,
+    });
   });
 
   it("uses stable manual-message error codes for malformed artifacts and wrong Paths", async () => {

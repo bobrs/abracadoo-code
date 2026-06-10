@@ -5,6 +5,7 @@ import type {
   HumanKeyContact,
   HumanKeyCredential,
   HumanKeyEvent,
+  HumanKeyLoopWitness,
   HumanKeyPath,
   SecretRef,
 } from "../model/types";
@@ -23,6 +24,7 @@ export type HumanKeyBackup = {
   credentials: HumanKeyCredential[];
   paths: HumanKeyPath[];
   events: HumanKeyEvent[];
+  loopWitnesses: HumanKeyLoopWitness[];
   secrets: HumanKeyBackupSecret[];
 };
 
@@ -39,6 +41,7 @@ export type ImportHumanKeyBackupResult = {
   credentialsImported: number;
   pathsImported: number;
   eventsImported: number;
+  loopWitnessesImported: number;
   secretsImported: number;
 };
 
@@ -74,7 +77,7 @@ function normalizeEvent(event: HumanKeyEvent): HumanKeyEvent {
   return normalized;
 }
 
-function assertBackup(value: unknown): asserts value is HumanKeyBackup | (Omit<HumanKeyBackup, "paths"> & { lanes: HumanKeyPath[] }) {
+function assertBackup(value: unknown): asserts value is HumanKeyBackup | (Omit<HumanKeyBackup, "paths" | "loopWitnesses"> & { lanes: HumanKeyPath[]; loopWitnesses?: HumanKeyLoopWitness[] }) {
   if (!value || typeof value !== "object") {
     throw new Error("Backup is not an object.");
   }
@@ -97,13 +100,14 @@ function assertBackup(value: unknown): asserts value is HumanKeyBackup | (Omit<H
 
 function normalizeBackup(value: unknown): HumanKeyBackup {
   assertBackup(value);
-  const candidate = value as HumanKeyBackup & { lanes?: HumanKeyPath[] };
+  const candidate = value as HumanKeyBackup & { lanes?: HumanKeyPath[]; loopWitnesses?: HumanKeyLoopWitness[] };
   const paths = candidate.paths ?? candidate.lanes ?? [];
   return {
     ...candidate,
     contacts: candidate.contacts.map(normalizeContact),
     paths: paths.map(normalizePath),
     events: candidate.events.map(normalizeEvent),
+    loopWitnesses: candidate.loopWitnesses ?? [],
   };
 }
 
@@ -149,10 +153,14 @@ export async function exportHumanKeyBackup(runtime: AbracadooRuntime): Promise<H
   );
   const pathsNested = await Promise.all(contacts.map((contact) => runtime.storage.listPathsForContact(contact.id)));
   const eventsNested = await Promise.all(contacts.map((contact) => runtime.storage.listEventsForContact(contact.id)));
+  const loopWitnessesNested = await Promise.all(
+    contacts.map((contact) => runtime.storage.listLoopWitnessesForContact(contact.id))
+  );
 
   const credentials = credentialsNested.flat();
   const paths = pathsNested.flat();
   const events = eventsNested.flat();
+  const loopWitnesses = loopWitnessesNested.flat();
   const secretRefs = unique([
     ...credentials.map((credential) => credential.secretRef),
     ...paths.map((path) => path.secretRef).filter((ref): ref is string => Boolean(ref)),
@@ -183,6 +191,7 @@ export async function exportHumanKeyBackup(runtime: AbracadooRuntime): Promise<H
     credentials,
     paths,
     events,
+    loopWitnesses,
     secrets,
   };
 }
@@ -253,11 +262,16 @@ export async function importHumanKeyBackup(
     await runtime.storage.appendEvent(event);
   }
 
+  for (const loopWitness of backup.loopWitnesses) {
+    await runtime.storage.saveLoopWitness(loopWitness);
+  }
+
   return {
     contactsImported: backup.contacts.length,
     credentialsImported: backup.credentials.length,
     pathsImported: backup.paths.length,
     eventsImported: backup.events.length,
+    loopWitnessesImported: backup.loopWitnesses.length,
     secretsImported: backup.secrets.length,
   };
 }

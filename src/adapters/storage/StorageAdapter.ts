@@ -5,7 +5,9 @@ import type {
   HumanKeyContact,
   HumanKeyCredential,
   HumanKeyEvent,
+  HumanKeyLoopWitness,
   HumanKeyPath,
+  LoopWitnessId,
   PathId,
 } from "../../humankey/model/types";
 
@@ -25,4 +27,8 @@ export interface StorageAdapter {
   getEvent(id: EventId): Promise<HumanKeyEvent | null>;
   listEventsForContact(contactId: ContactId): Promise<HumanKeyEvent[]>;
   appendEvent(event: HumanKeyEvent): Promise<void>;
+
+  getLoopWitness(id: LoopWitnessId): Promise<HumanKeyLoopWitness | null>;
+  listLoopWitnessesForContact(contactId: ContactId): Promise<HumanKeyLoopWitness[]>;
+  saveLoopWitness(loopWitness: HumanKeyLoopWitness): Promise<void>;
 }
