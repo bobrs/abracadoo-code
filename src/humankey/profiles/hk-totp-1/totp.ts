@@ -1,4 +1,10 @@
-function counterToBytes(counter: number): Uint8Array {
+function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
+  const buffer = new ArrayBuffer(bytes.byteLength);
+  new Uint8Array(buffer).set(bytes);
+  return buffer;
+}
+
+function counterToBuffer(counter: number): ArrayBuffer {
   const bytes = new Uint8Array(8);
   let value = BigInt(counter);
 
@@ -7,7 +13,7 @@ function counterToBytes(counter: number): Uint8Array {
     value >>= 8n;
   }
 
-  return bytes;
+  return toArrayBuffer(bytes);
 }
 
 function byteAt(bytes: Uint8Array, index: number): number {
@@ -43,13 +49,13 @@ export async function generateTotp(input: GenerateTotpInput): Promise<string> {
 
   const key = await crypto.subtle.importKey(
     "raw",
-    input.secret,
+    toArrayBuffer(input.secret),
     { name: "HMAC", hash: "SHA-1" },
     false,
     ["sign"]
   );
 
-  const signature = await crypto.subtle.sign("HMAC", key, counterToBytes(counter));
+  const signature = await crypto.subtle.sign("HMAC", key, counterToBuffer(counter));
   const codeInt = truncate(new Uint8Array(signature));
   const modulus = 10 ** digits;
 
