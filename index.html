@@ -37,6 +37,16 @@
 
           <h2>Contacts</h2>
           <div id="contact-list" class="contact-list"></div>
+
+          <section class="backup-box">
+            <h2>Backup</h2>
+            <p class="help">Export/import preserves local Acquaintances, events, and TOTP secrets. Current exports are sensitive plaintext JSON.</p>
+            <div class="button-row">
+              <button id="export-backup" type="button">Export backup</button>
+              <button id="import-backup-trigger" type="button">Import backup</button>
+            </div>
+            <input id="import-backup-file" type="file" accept="application/json,.json" hidden />
+          </section>
         </aside>
 
         <section id="selected-contact"></section>

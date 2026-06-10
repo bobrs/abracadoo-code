@@ -2,6 +2,8 @@ import * as QRCode from "qrcode";
 import { createBrowserRuntime } from "./runtime/createBrowserRuntime";
 import {
   createAcquaintanceWithTotp,
+  exportHumanKeyBackup,
+  importHumanKeyBackup,
   recordCredentialShared,
   revokeCredential,
   verifyAcquaintanceCode,
@@ -21,6 +23,20 @@ function qs<T extends Element>(selector: string): T {
 
 function setText(selector: string, value: string): void {
   qs<HTMLElement>(selector).textContent = value;
+}
+
+function currentDateStamp(): string {
+  return new Date().toISOString().slice(0, 10).replaceAll("-", "");
+}
+
+function downloadTextFile(filename: string, content: string, mimeType: string): void {
+  const blob = new Blob([content], { type: mimeType });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = filename;
+  anchor.click();
+  URL.revokeObjectURL(url);
 }
 
 function formatDate(value?: string): string {
@@ -115,6 +131,7 @@ async function renderSelectedContact(): Promise<void> {
             <button id="mark-shared" type="button" ${credential && !isRevoked ? "" : "disabled"}>Mark shared</button>
             <button id="revoke-credential" type="button" ${credential && !isRevoked ? "" : "disabled"}>Revoke</button>
           </div>
+          <p class="danger-note">Backup exports contain secret material. Store them like passwords until encrypted backups land.</p>
         </div>
 
         <div>
@@ -131,7 +148,9 @@ async function renderSelectedContact(): Promise<void> {
             <div><dt>Created</dt><dd>${formatDate(contact.createdAt)}</dd></div>
             <div><dt>Last verified</dt><dd>${formatDate(credential?.lifecycle.lastVerifiedAt)}</dd></div>
             <div><dt>Revoked</dt><dd>${formatDate(credential?.lifecycle.revokedAt)}</dd></div>
+            <div><dt>Relationship</dt><dd>${contact.state === "relationship" ? "Established" : "Not established"}</dd></div>
           </dl>
+          <p class="help status-note">Authentication proves possession. Messaging proves a living channel. Relationship requires a completed loop.</p>
         </div>
       </div>
 
@@ -188,6 +207,40 @@ function bindSelectedContactActions(contact: HumanKeyContact, credential?: Human
   });
 }
 
+
+async function bindBackupActions(): Promise<void> {
+  qs<HTMLButtonElement>("#export-backup").addEventListener("click", async () => {
+    const backup = await exportHumanKeyBackup(runtime);
+    const filename = `${currentDateStamp()}__ABRACADOO__BACKUP__HUMANKEY-LOCAL__V0-4__sensitive.json`;
+    downloadTextFile(filename, JSON.stringify(backup, null, 2), "application/json");
+    showNotice("Sensitive HumanKey backup exported.");
+  });
+
+  qs<HTMLButtonElement>("#import-backup-trigger").addEventListener("click", () => {
+    qs<HTMLInputElement>("#import-backup-file").click();
+  });
+
+  qs<HTMLInputElement>("#import-backup-file").addEventListener("change", async (event) => {
+    const input = event.currentTarget as HTMLInputElement;
+    const file = input.files?.[0];
+    if (!file) return;
+
+    try {
+      const parsed = JSON.parse(await file.text()) as unknown;
+      const result = await importHumanKeyBackup(runtime, parsed);
+      selectedContactId = undefined;
+      showNotice(
+        `Imported ${result.contactsImported} contacts, ${result.credentialsImported} credentials, and ${result.eventsImported} events.`
+      );
+      await render();
+    } catch (error) {
+      showNotice(error instanceof Error ? error.message : String(error));
+    } finally {
+      input.value = "";
+    }
+  });
+}
+
 async function bindCreateForm(): Promise<void> {
   qs<HTMLFormElement>("#create-form").addEventListener("submit", async (event) => {
     event.preventDefault();
@@ -234,6 +287,7 @@ async function render(): Promise<void> {
 
 async function main(): Promise<void> {
   await bindCreateForm();
+  await bindBackupActions();
   await render();
 
   if ("serviceWorker" in navigator) {

@@ -14,6 +14,29 @@ This scaffold intentionally keeps the MVP small while preserving the future Huma
 - Lanes exist in the model before messaging exists in the UI.
 - Transports such as Nostr, server messaging, and manual QR/copy-paste remain adapters, not the ontology.
 
+## Architecture pass V0.4
+
+This pass makes the working local-first Acquaintance MVP more durable and testable.
+
+Added:
+
+- HumanKey backup service: `exportHumanKeyBackup()` / `importHumanKeyBackup()`
+- Sensitive plaintext JSON export/import in the browser UI
+- Lifecycle copy clarifying that authentication does not establish a Relationship
+- `vitest` test suite for verification, revocation, and backup restore behavior
+- `docs/architecture-pass-v0-4.md`
+
+New commands:
+
+```bash
+npm run typecheck
+npm run test
+npm run build
+npm run check
+```
+
+Current backup exports contain TOTP secret material and should be stored like passwords. Encrypted backups are the next security pass.
+
 ## Architecture pass V0.3
 
 This pass turns the architecture seed into a runnable browser/PWA shell while preserving the adapter/runtime boundary.
@@ -90,8 +113,8 @@ Domain services orchestrate contact, credential, event, policy, vault, and stora
 
 ## Next implementation targets
 
-1. Add automated tests for TOTP generation, verification, revocation, and lifecycle state derivation.
-2. Add encrypted local vault implementation.
-3. Add export/import of HumanKey contacts without raw secret leakage by default.
+1. Add encrypted local vault implementation behind the existing `SecretVault` interface.
+2. Add encrypted backup export/import or passphrase-wrapped backup files.
+3. Add conflict-aware import behavior for duplicate contacts/credentials.
 4. Add explicit manual transport artifacts for QR/copy/paste exchange.
-5. Add first `HK_LANE_1` placeholder UI after the Acquaintance MVP is stable.
+5. Add first `HK_LANE_1` placeholder UI after the Acquaintance vault is stable.

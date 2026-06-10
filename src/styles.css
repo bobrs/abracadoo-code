@@ -260,3 +260,20 @@ textarea {
     display: grid;
   }
 }
+
+.backup-box {
+  margin-top: 1.4rem;
+  padding-top: 1rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.danger-note {
+  color: #ffcf9e;
+  font-size: 0.88rem;
+  font-weight: 700;
+}
+
+.status-note {
+  border-left: 3px solid rgba(158, 230, 216, 0.7);
+  padding-left: 0.8rem;
+}
