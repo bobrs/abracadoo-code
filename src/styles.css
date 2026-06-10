@@ -68,7 +68,7 @@ button:disabled {
 .eyebrow {
   margin: 0;
   text-transform: uppercase;
-  letter-spacing: 0.14em;
+  letter-spacing: 0;
   color: #9ee6d8;
   font-size: 0.78rem;
   font-weight: 800;
@@ -351,6 +351,24 @@ textarea {
   padding-top: 1rem;
 }
 
+.flow-section {
+  margin-top: 1.25rem;
+  padding-top: 1rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.flow-section h3,
+.flow-section h4 {
+  margin: 0.2rem 0 0.45rem;
+}
+
+.artifact-textarea {
+  min-height: 8.5rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.78rem;
+  line-height: 1.45;
+}
+
 .manual-message-panel {
   border-color: rgba(255, 180, 92, 0.28);
 }
@@ -389,6 +407,10 @@ textarea {
   color: #c8c1b4;
 }
 
+.path-status {
+  margin-bottom: 1rem;
+}
+
 .relationship-status {
   border-color: rgba(158, 230, 216, 0.42);
   background: rgba(158, 230, 216, 0.12);
@@ -402,6 +424,16 @@ textarea {
 
 .status-relationship {
   color: #9ee6d8 !important;
+}
+
+.status-acquaintance,
+.status-verified,
+.status-path-connected {
+  color: #9ee6d8 !important;
+}
+
+.status-return-invited {
+  color: #ffcf9e !important;
 }
 
 .status-loop-offered,

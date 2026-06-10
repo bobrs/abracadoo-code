@@ -1,4 +1,5 @@
 export * from "./backup";
+export * from "./artifactText";
 export * from "./createAcquaintanceWithTotp";
 export * from "./paths";
 export * from "./manualMessages";

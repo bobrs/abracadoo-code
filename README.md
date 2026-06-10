@@ -92,10 +92,10 @@ Domain services orchestrate contact, credential, event, policy, vault, and stora
 
 ## Near implementation targets
 
-1. Make manual message exchange more humane with clearer copy/paste and file flows.
+1. Refine Acquaintance, Path, Loop, and Relationship management views.
 2. Prepare for optional QR display of message packets.
-3. Make Acquaintance, Path, Loop, and Relationship topology easier to scan.
-4. Strengthen installable PWA/offline behavior after load.
+3. Strengthen installable PWA/offline behavior after load.
+4. Keep explicit consent confirmation as a later layer, separate from delivery, receipt, Loop witness, and Relationship status.
 
 ## V0.5: encrypted local vault
 
@@ -158,7 +158,7 @@ V0.7.1 keeps the V0.7 architecture and makes the first Loop clearer and less sur
 - manual message import has friendly errors for malformed artifacts, wrong Paths, wrong Acquaintances, locked vaults, and failed decrypts
 - the UI shows friendly event labels and a selected-Acquaintance Loop / Relationship status area
 
-The witness remains a coarse contact-level Loop witness. Path-pair-specific Loop modeling is a future improvement, not part of this confidence pass.
+V0.7.1 used coarse contact-level witness language. V0.7.2 supersedes that with local path-pair `LoopWitness` records while preserving the same user-visible Relationship threshold.
 
 ## V0.7.2: Witness & forgetting alignment
 
@@ -171,3 +171,16 @@ Explicit consent confirmation is reserved for a later layer through event names 
 Manual messages remain `HK_MANUAL_MESSAGE_1` / Abracadoo.app profile artifacts. Optional envelope reservations exist for future proof, witness, controlled-verifiability, deniability, and time-profile layers, but V0.7.2 does not implement full Abracadabracadoo core proof artifacts.
 
 Public/broadcast/listening Paths, image/photo/QR carriers, TIS export, server transport, Nostr transport, conditional deniability crypto, and subjective-epoch TOTP remain out of scope for this pass.
+
+## V0.8: Manual Exchange UX
+
+V0.8 makes the first human-to-human manual exchange easier to understand without changing the trust model.
+
+- The selected Acquaintance view is organized into Verify, Paths, Messages, and History.
+- Path invites and sealed messages can be shared by downloaded file or copy/paste JSON text.
+- Paste import tolerates whitespace, code blocks, and surrounding text when the Abracadoo JSON object is detectable.
+- The UI uses “sealed message” language while keeping `HK_MANUAL_MESSAGE_1` visible as the technical profile.
+- Copy reinforces the carrier-independent rule: the Path secures the message, not the carrier, and the carrier does not need plaintext.
+- `LoopWitness` semantics remain from V0.7.2: local, `path_pair` scoped, with artifact/ciphertext digests only.
+- Relationship remains an Abracadoo.app state: established by witnessed loop, not agreement, legal consent, public trust, emotional closeness, or consent to message contents.
+- Explicit consent confirmation, QR/image/photo carriers, public/broadcast/listening Paths, server transport, and Nostr transport remain intentionally out of scope.

@@ -81,7 +81,8 @@ export type ManualMessageErrorCode =
   | "WRONG_PATH"
   | "WRONG_RECIPIENT"
   | "VAULT_LOCKED"
-  | "DECRYPT_FAILED";
+  | "DECRYPT_FAILED"
+  | "DUPLICATE_MESSAGE";
 
 export class ManualMessageError extends Error {
   readonly code: ManualMessageErrorCode;
@@ -512,11 +513,12 @@ export async function importManualMessage(
   runtime: AbracadooRuntime,
   input: ImportManualMessageInput
 ): Promise<ImportManualMessageResult> {
-  assertManualMessageArtifact(input.artifact);
+  const artifact = input.artifact;
+  assertManualMessageArtifact(artifact);
   const contact = await runtime.storage.getContact(input.contactId);
   if (!contact) throw new Error("Contact not found.");
 
-  const inboundPath = await runtime.storage.getPath(input.artifact.message.recipientPathId);
+  const inboundPath = await runtime.storage.getPath(artifact.message.recipientPathId);
   if (!inboundPath) {
     throw new ManualMessageError("WRONG_PATH", "No matching inbound path found for this manual message.");
   }
@@ -528,6 +530,19 @@ export async function importManualMessage(
   }
   if (!inboundPath.secretRef) {
     throw new ManualMessageError("WRONG_PATH", "The matching inbound Path is missing its receive key.");
+  }
+
+  const artifactDigest = await sha256Base64(artifact);
+  const ciphertextDigest = await sha256Base64(artifact.message.encryption.ciphertext);
+  const existingEvents = await runtime.storage.listEventsForContact(contact.id);
+  const duplicateReceivedEvent = existingEvents.some(
+    (event) =>
+      event.type === "message.received" &&
+      eventDataString(event, "messageId") === artifact.message.id &&
+      eventDataString(event, "artifactDigest") === artifactDigest
+  );
+  if (duplicateReceivedEvent) {
+    throw new ManualMessageError("DUPLICATE_MESSAGE", "This manual message has already been imported.");
   }
 
   let privateKeyBytes: Uint8Array;
@@ -543,11 +558,11 @@ export async function importManualMessage(
   let plaintextBytes: ArrayBuffer;
   try {
     const privateJwk = deserializeJwk(privateKeyBytes);
-    const aesKey = await deriveAesKeyFromRecipient(privateJwk, input.artifact.message.encryption.senderEphemeralPublicKeyJwk);
+    const aesKey = await deriveAesKeyFromRecipient(privateJwk, artifact.message.encryption.senderEphemeralPublicKeyJwk);
     plaintextBytes = await crypto.subtle.decrypt(
-      { name: "AES-GCM", iv: toArrayBuffer(base64ToBytes(input.artifact.message.encryption.iv)) },
+      { name: "AES-GCM", iv: toArrayBuffer(base64ToBytes(artifact.message.encryption.iv)) },
       aesKey,
-      toArrayBuffer(base64ToBytes(input.artifact.message.encryption.ciphertext))
+      toArrayBuffer(base64ToBytes(artifact.message.encryption.ciphertext))
     );
   } catch (error) {
     throw new ManualMessageError("DECRYPT_FAILED", "This manual message could not be decrypted with this Path.", error);
@@ -562,10 +577,10 @@ export async function importManualMessage(
     nowIso,
     data: {
       mode: "manual",
-      messageId: input.artifact.message.id,
+      messageId: artifact.message.id,
       encrypted: true,
-      artifactDigest: await sha256Base64(input.artifact),
-      ciphertextDigest: await sha256Base64(input.artifact.message.encryption.ciphertext),
+      artifactDigest,
+      ciphertextDigest,
     },
   });
 

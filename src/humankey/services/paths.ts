@@ -40,6 +40,23 @@ export type ImportPathInviteResult = {
   path: HumanKeyPath;
 };
 
+export type PathInviteErrorCode =
+  | "MALFORMED_PATH_INVITE"
+  | "UNSUPPORTED_PATH_INVITE_SCHEMA"
+  | "DUPLICATE_PATH_INVITE";
+
+export class PathInviteError extends Error {
+  readonly code: PathInviteErrorCode;
+  readonly schema?: string;
+
+  constructor(code: PathInviteErrorCode, message: string, options?: { schema?: string }) {
+    super(message);
+    this.name = "PathInviteError";
+    this.code = code;
+    if (options?.schema !== undefined) this.schema = options.schema;
+  }
+}
+
 type LegacyHumanKeyLaneInvite = {
   schema: "ABRACADOO_HUMANKEY_LANE_INVITE";
   schemaVersion: 1;
@@ -58,19 +75,23 @@ type SupportedPathInvite = HumanKeyPathInvite | LegacyHumanKeyLaneInvite;
 
 function assertPathInvite(value: unknown): asserts value is SupportedPathInvite {
   if (!value || typeof value !== "object") {
-    throw new Error("Path invite is not an object.");
+    throw new PathInviteError("MALFORMED_PATH_INVITE", "Path invite is not an object.");
   }
   const candidate = value as { schema?: string; schemaVersion?: number; path?: HumanKeyPathInvite["path"]; lane?: LegacyHumanKeyLaneInvite["lane"] };
   const isPathInvite = candidate.schema === "ABRACADOO_HUMANKEY_PATH_INVITE" && candidate.schemaVersion === 1;
   const isLegacyLaneInvite = candidate.schema === "ABRACADOO_HUMANKEY_LANE_INVITE" && candidate.schemaVersion === 1;
   if (!isPathInvite && !isLegacyLaneInvite) {
-    throw new Error("Unsupported Abracadoo HumanKey path invite schema.");
+    throw new PathInviteError(
+      "UNSUPPORTED_PATH_INVITE_SCHEMA",
+      "Unsupported Abracadoo HumanKey path invite schema.",
+      candidate.schema === undefined ? undefined : { schema: candidate.schema }
+    );
   }
   if (isPathInvite && (!candidate.path || candidate.path.profile !== "HK_PATH_1")) {
-    throw new Error("Path invite is missing its HK_PATH_1 payload.");
+    throw new PathInviteError("MALFORMED_PATH_INVITE", "Path invite is missing its HK_PATH_1 payload.");
   }
   if (isLegacyLaneInvite && (!candidate.lane || candidate.lane.profile !== "HK_LANE_1")) {
-    throw new Error("Legacy lane invite is missing its HK_LANE_1 payload.");
+    throw new PathInviteError("MALFORMED_PATH_INVITE", "Legacy lane invite is missing its HK_LANE_1 payload.");
   }
 }
 
@@ -197,6 +218,16 @@ export async function importPathInvite(
 
   const contact = await runtime.storage.getContact(input.contactId);
   if (!contact) throw new Error("Contact not found.");
+  const existingPaths = await runtime.storage.listPathsForContact(contact.id);
+  const duplicatePath = existingPaths.find(
+    (path) =>
+      path.direction === "outbound" &&
+      !path.lifecycle.revokedAt &&
+      path.remotePathId === invitePath.inviteId
+  );
+  if (duplicatePath) {
+    throw new PathInviteError("DUPLICATE_PATH_INVITE", "This Path invite is already imported.");
+  }
 
   const createdAt = runtime.clock.nowIso();
   const path: HumanKeyPath = {

@@ -4,6 +4,7 @@ import { createHumanKeyContact } from "../../contacts/createContact";
 import { deriveContactState } from "../../contacts/deriveContactState";
 import { createHumanKeyEvent } from "../../events/createEvent";
 import {
+  ArtifactTextError,
   createAcquaintanceWithTotp,
   createInboundPath,
   decryptEncryptedHumanKeyBackup,
@@ -13,8 +14,11 @@ import {
   importPathInvite,
   createManualMessage,
   importManualMessage,
+  parseArtifactText,
+  PathInviteError,
   revokeCredential,
   recordPathShared,
+  stringifyArtifactText,
   verifyAcquaintanceCode,
 } from "..";
 import type { AbracadooRuntime } from "../../../runtime/AbracadooRuntime";
@@ -226,6 +230,54 @@ describe("HumanKey Acquaintance HK_TOTP_1", () => {
     expect(restoredContact?.state).not.toBe("relationship");
   });
 
+  it("round-trips Path invites through copy/paste text and file JSON", async () => {
+    const { runtime, contact } = await createVerifiedAcquaintance();
+    const createdPath = await createInboundPath(runtime, { contactId: contact.id });
+    const sharedInvite = await recordPathShared(runtime, createdPath.path.id);
+    const inviteText = stringifyArtifactText(sharedInvite);
+
+    const pastedInvite = parseArtifactText(`\n\`\`\`json\n${inviteText}\n\`\`\`\n`, {
+      artifactName: "Path invite",
+      expectedSchemas: ["ABRACADOO_HUMANKEY_PATH_INVITE", "ABRACADOO_HUMANKEY_LANE_INVITE"],
+    });
+    const restoredRuntime = createLocalRuntime();
+    const restored = await createAcquaintanceWithTotp(restoredRuntime, { displayName: "Bob" });
+    const pastedImport = await importPathInvite(restoredRuntime, { contactId: restored.contact.id, invite: pastedInvite });
+
+    expect(pastedImport.path.direction).toBe("outbound");
+    expect(pastedImport.path.remotePathId).toBe(sharedInvite.path.inviteId);
+
+    await expect(
+      importPathInvite(restoredRuntime, { contactId: restored.contact.id, invite: pastedInvite })
+    ).rejects.toBeInstanceOf(PathInviteError);
+    await expect(
+      importPathInvite(restoredRuntime, { contactId: restored.contact.id, invite: pastedInvite })
+    ).rejects.toMatchObject({ code: "DUPLICATE_PATH_INVITE" });
+
+    const fileRuntime = createLocalRuntime();
+    const fileContact = await createAcquaintanceWithTotp(fileRuntime, { displayName: "Bob from file" });
+    const fileInvite = JSON.parse(inviteText) as unknown;
+    const fileImport = await importPathInvite(fileRuntime, { contactId: fileContact.contact.id, invite: fileInvite });
+    expect(fileImport.path.remotePathId).toBe(sharedInvite.path.inviteId);
+  });
+
+  it("parses pasted artifacts with whitespace or surrounding text and rejects invalid JSON", async () => {
+    const { runtime, contact } = await createVerifiedAcquaintance();
+    const createdPath = await createInboundPath(runtime, { contactId: contact.id });
+    const sharedInvite = await recordPathShared(runtime, createdPath.path.id);
+    const inviteText = stringifyArtifactText(sharedInvite);
+
+    expect(parseArtifactText(`\n  ${inviteText}  \n`, { expectedSchemas: ["ABRACADOO_HUMANKEY_PATH_INVITE"] })).toEqual(sharedInvite);
+    expect(parseArtifactText(`Here is the invite:\n${inviteText}\nThanks.`, { expectedSchemas: ["ABRACADOO_HUMANKEY_PATH_INVITE"] })).toEqual(sharedInvite);
+    expect(() => parseArtifactText("not json", { artifactName: "Path invite" })).toThrow(ArtifactTextError);
+    expect(() =>
+      parseArtifactText(stringifyArtifactText({ schema: "OTHER", schemaVersion: 1 }), {
+        artifactName: "Path invite",
+        expectedSchemas: ["ABRACADOO_HUMANKEY_PATH_INVITE"],
+      })
+    ).toThrow(ArtifactTextError);
+  });
+
   it("does not create receive-key secret material when importing a path invite", async () => {
     const receiverRuntime = createLocalRuntime();
     const receiver = await createAcquaintanceWithTotp(receiverRuntime, { displayName: "Receiver" });
@@ -280,6 +332,54 @@ describe("HumanKey Acquaintance HK_TOTP_1", () => {
     expect(countEvents(aliceEvents, "relationship.established")).toBe(0);
   });
 
+  it("round-trips sealed messages through copy/paste text and file JSON", async () => {
+    const { aliceRuntime, bobRuntime, aliceViewOfBob, bobViewOfAlice, aliceOutbound, bobOutbound } = await createManualExchangePair();
+
+    const aliceMessage = await createManualMessage(aliceRuntime, {
+      contactId: aliceViewOfBob.contact.id,
+      outboundPathId: aliceOutbound.path.id,
+      plaintext: "File-style sealed note.",
+    });
+    const bobMessage = await createManualMessage(bobRuntime, {
+      contactId: bobViewOfAlice.contact.id,
+      outboundPathId: bobOutbound.path.id,
+      plaintext: "Paste-style sealed note.",
+    });
+
+    const pastedBobMessage = parseArtifactText(`\n${stringifyArtifactText(bobMessage.artifact)}\n`, {
+      artifactName: "sealed message",
+      expectedSchemas: ["ABRACADOO_HUMANKEY_MANUAL_MESSAGE"],
+    });
+    const aliceImport = await importManualMessage(aliceRuntime, {
+      contactId: aliceViewOfBob.contact.id,
+      artifact: pastedBobMessage,
+    });
+
+    const fileAliceMessage = JSON.parse(stringifyArtifactText(aliceMessage.artifact)) as unknown;
+    const bobImport = await importManualMessage(bobRuntime, {
+      contactId: bobViewOfAlice.contact.id,
+      artifact: fileAliceMessage,
+    });
+
+    expect(aliceImport.plaintext).toBe("Paste-style sealed note.");
+    expect(bobImport.plaintext).toBe("File-style sealed note.");
+    expect(aliceImport.relationshipEstablished).toBe(true);
+    expect(bobImport.relationshipEstablished).toBe(true);
+
+    const aliceEvents = await aliceRuntime.storage.listEventsForContact(aliceViewOfBob.contact.id);
+    const loopEvent = aliceEvents.find((event) => event.type === "loop.completed");
+    const relationshipEvent = aliceEvents.find((event) => event.type === "relationship.established");
+    expect(loopEvent?.data?.loopWitnessId).toEqual(expect.any(String));
+    expect(relationshipEvent?.data).toMatchObject({
+      basis: "witnessed_manual_loop",
+      loopWitnessId: loopEvent?.data?.loopWitnessId,
+      explicitConsentConfirmation: "absent",
+      consentToContents: false,
+    });
+    expect(JSON.stringify(aliceEvents)).not.toContain("Paste-style sealed note.");
+    expect(JSON.stringify(aliceEvents)).not.toContain("plaintextSha256");
+  });
+
   it("exchanges encrypted manual messages and establishes a Relationship after a witnessed Loop", async () => {
     const { aliceRuntime, bobRuntime, aliceViewOfBob, bobViewOfAlice, aliceInbound, aliceOutbound, bobOutbound } = await createManualExchangePair();
 
@@ -324,6 +424,8 @@ describe("HumanKey Acquaintance HK_TOTP_1", () => {
     expect(countEvents(aliceEvents, "relationship.established")).toBe(1);
     expect(JSON.stringify(aliceEvents)).not.toContain("plaintextSha256");
     expect(JSON.stringify(aliceEvents)).not.toContain("plaintextLength");
+    expect(JSON.stringify(aliceEvents)).not.toContain(aliceMessageText);
+    expect(JSON.stringify(aliceEvents)).not.toContain(bobMessageText);
 
     let aliceLoopWitnesses = await aliceRuntime.storage.listLoopWitnessesForContact(aliceViewOfBob.contact.id);
     expect(aliceLoopWitnesses).toHaveLength(1);
@@ -361,10 +463,12 @@ describe("HumanKey Acquaintance HK_TOTP_1", () => {
       outboundPathId: aliceOutbound.path.id,
       plaintext: "A later sent message should not duplicate witness events.",
     });
-    await importManualMessage(aliceRuntime, {
-      contactId: aliceViewOfBob.contact.id,
-      artifact: bobMessage.artifact,
-    });
+    await expect(
+      importManualMessage(aliceRuntime, {
+        contactId: aliceViewOfBob.contact.id,
+        artifact: bobMessage.artifact,
+      })
+    ).rejects.toMatchObject({ code: "DUPLICATE_MESSAGE" });
 
     aliceEvents = await aliceRuntime.storage.listEventsForContact(aliceViewOfBob.contact.id);
     aliceLoopWitnesses = await aliceRuntime.storage.listLoopWitnessesForContact(aliceViewOfBob.contact.id);
@@ -446,6 +550,20 @@ describe("HumanKey Acquaintance HK_TOTP_1", () => {
     const restoredLoopWitnesses = await restoredRuntime.storage.listLoopWitnessesForContact(aliceViewOfBob.contact.id);
     expect(result.loopWitnessesImported).toBe(1);
     expect(restoredLoopWitnesses).toEqual(backup.loopWitnesses);
+  });
+
+  it("imports older backups without LoopWitness records", async () => {
+    const { runtime, contact, credential } = await createVerifiedAcquaintance();
+    const backup = await exportHumanKeyBackup(runtime);
+    const olderBackup = structuredClone(backup) as Omit<typeof backup, "loopWitnesses"> & { loopWitnesses?: never };
+    delete olderBackup.loopWitnesses;
+
+    const restoredRuntime = createLocalRuntime();
+    const result = await importHumanKeyBackup(restoredRuntime, olderBackup);
+
+    expect(result.loopWitnessesImported).toBe(0);
+    expect(await restoredRuntime.storage.getContact(contact.id)).toBeDefined();
+    expect(await restoredRuntime.storage.getCredential(credential.id)).toBeDefined();
   });
 
   it("keeps manual message artifact imports backward-compatible with reserved envelope fields", async () => {
