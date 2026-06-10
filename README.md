@@ -100,3 +100,15 @@ Domain services orchestrate contact, credential, event, policy, vault, and stora
 
 V0.5 replaces the browser runtime's plaintext IndexedDB secret vault with `EncryptedIndexedDbSecretVault`. Users set/unlock a local vault passphrase before creating or verifying HK_TOTP_1 credentials. Active TOTP secret material is encrypted at rest in IndexedDB, and V0.5 exports are encrypted passphrase-wrapped JSON backups. V0.4 plaintext backups can still be imported and are stored through the encrypted vault after import.
 
+
+## V0.5.1: vault confidence and invited Acquaintance label
+
+V0.5.1 keeps the V0.5 encrypted-vault architecture and adds a small confidence/polish pass:
+
+- clearer vault `new` / `locked` / `unlocked` status styling
+- friendlier wrong-passphrase messaging
+- encrypted-backup export warning
+- encrypted-backup self-check before download
+- orange `acquaintance` label for contacts whose credential/lane has been shared but never successfully validated
+
+The orange label is a UI cue only; the HumanKey contact state remains `acquaintance`.

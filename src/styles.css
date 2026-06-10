@@ -309,3 +309,27 @@ textarea {
 .vault-passphrase-label {
   margin-top: 0.9rem;
 }
+
+.contact-state {
+  font-weight: 800;
+}
+
+.status-acquaintance-invited {
+  color: #ffb45c !important;
+}
+
+.vault-locked {
+  background: rgba(255, 180, 92, 0.16);
+  color: #ffb45c;
+}
+
+.vault-unlocked,
+.vault-open {
+  background: rgba(158, 230, 216, 0.15);
+  color: #9ee6d8;
+}
+
+.vault-new {
+  background: rgba(255, 242, 180, 0.16);
+  color: #fff2b4;
+}

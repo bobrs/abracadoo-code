@@ -18,6 +18,24 @@ const runtime = createBrowserRuntime();
 let selectedContactId: string | undefined;
 let currentQrUri: string | undefined;
 
+type ContactUiStatus = {
+  label: string;
+  className: string;
+};
+
+function deriveContactUiStatus(contact: HumanKeyContact, events: HumanKeyEvent[]): ContactUiStatus {
+  if (contact.state === "acquaintance") {
+    const hasSharedInvite = events.some((event) => event.type === "credential.shared" || event.type === "lane.shared");
+    const hasValidated = events.some((event) => event.type === "credential.verified");
+    if (hasSharedInvite && !hasValidated) {
+      return { label: "acquaintance", className: "status-acquaintance-invited" };
+    }
+  }
+
+  return { label: contact.state, className: `status-${contact.state.replaceAll("_", "-")}` };
+}
+
+
 function qs<T extends Element>(selector: string): T {
   const element = document.querySelector<T>(selector);
   if (!element) throw new Error(`Missing element: ${selector}`);
@@ -75,22 +93,27 @@ async function renderContactList(): Promise<void> {
     return;
   }
 
-  contacts
-    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-    .forEach((contact) => {
-      const button = document.createElement("button");
-      button.type = "button";
-      button.className = contact.id === selectedContactId ? "contact-card selected" : "contact-card";
-      button.innerHTML = `
-        <strong>${escapeHtml(contact.displayName)}</strong>
-        <span>${contact.state}</span>
-      `;
-      button.addEventListener("click", () => {
-        selectedContactId = contact.id;
-        void render();
-      });
-      list.appendChild(button);
+  const contactsWithEvents = await Promise.all(
+    contacts
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+      .map(async (contact) => ({ contact, events: await runtime.storage.listEventsForContact(contact.id) }))
+  );
+
+  contactsWithEvents.forEach(({ contact, events }) => {
+    const status = deriveContactUiStatus(contact, events);
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = contact.id === selectedContactId ? "contact-card selected" : "contact-card";
+    button.innerHTML = `
+      <strong>${escapeHtml(contact.displayName)}</strong>
+      <span class="contact-state ${status.className}">${escapeHtml(status.label)}</span>
+    `;
+    button.addEventListener("click", () => {
+      selectedContactId = contact.id;
+      void render();
     });
+    list.appendChild(button);
+  });
 }
 
 async function renderSelectedContact(): Promise<void> {
@@ -112,12 +135,13 @@ async function renderSelectedContact(): Promise<void> {
   const isRevoked = credential?.lifecycle.revokedAt !== undefined;
   const otpauthUri = credential?.publicMaterial?.otpauthUri;
   currentQrUri = otpauthUri;
+  const contactStatus = deriveContactUiStatus(contact, events);
 
   panel.innerHTML = `
     <section class="panel">
       <div class="section-heading">
         <div>
-          <p class="eyebrow">${contact.state}</p>
+          <p class="eyebrow contact-state ${contactStatus.className}">${escapeHtml(contactStatus.label)}</p>
           <h2>${escapeHtml(contact.displayName)}</h2>
         </div>
         <span class="pill">${credential?.profile ?? "no credential"}</span>
@@ -201,7 +225,7 @@ function bindSelectedContactActions(contact: HumanKeyContact, credential?: Human
     try {
       await ensureVaultUnlocked();
     } catch (error) {
-      showNotice(error instanceof Error ? error.message : String(error));
+      showNotice(friendlyErrorMessage(error));
       return;
     }
     const code = qs<HTMLInputElement>("#verify-code").value.trim();
@@ -221,11 +245,21 @@ async function refreshVaultStatus(): Promise<void> {
   const status = qs<HTMLElement>("#vault-status");
   if (!isUnlockableSecretVault(runtime.vault)) {
     status.textContent = "open";
+    status.className = "pill vault-open";
+    status.title = "This runtime does not require a vault unlock.";
     return;
   }
 
   const hasVault = await runtime.vault.hasVault();
-  status.textContent = runtime.vault.isUnlocked() ? "unlocked" : hasVault ? "locked" : "new";
+  const state = runtime.vault.isUnlocked() ? "unlocked" : hasVault ? "locked" : "new";
+  status.textContent = state;
+  status.className = `pill vault-${state}`;
+  status.title =
+    state === "unlocked"
+      ? "Local secret material is available until you lock the vault or close the page."
+      : state === "locked"
+        ? "Unlock the local vault before creating, verifying, exporting, or importing secret material."
+        : "Set up the local encrypted vault before creating an Acquaintance.";
 }
 
 function getVaultPassphraseFromUi(): string {
@@ -257,6 +291,28 @@ function askBackupPassphrase(action: "export" | "import"): string {
   return passphrase;
 }
 
+function friendlyErrorMessage(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error);
+  if (message.includes("decrypt") || message.includes("operation failed") || message.includes("did not unlock")) {
+    return "That passphrase did not unlock the vault or backup. Try again, and check for typos.";
+  }
+  return message;
+}
+
+function confirmEncryptedBackupExport(): boolean {
+  return confirm(
+    "Export an encrypted HumanKey backup?\n\n" +
+      "Keep the backup file and passphrase safe. Without the passphrase, the backup cannot be restored. Anyone with both can restore your Acquaintance tokens."
+  );
+}
+
+async function selfCheckEncryptedBackup(backup: unknown, passphrase: string): Promise<void> {
+  const decrypted = await decryptEncryptedHumanKeyBackup(backup, passphrase);
+  if (!Array.isArray(decrypted.contacts) || !Array.isArray(decrypted.credentials) || !Array.isArray(decrypted.events)) {
+    throw new Error("Encrypted backup self-check failed.");
+  }
+}
+
 async function bindBackupActions(): Promise<void> {
   qs<HTMLButtonElement>("#unlock-vault").addEventListener("click", async () => {
     try {
@@ -265,7 +321,7 @@ async function bindBackupActions(): Promise<void> {
       showNotice("Local vault unlocked.");
       await render();
     } catch (error) {
-      showNotice(error instanceof Error ? error.message : String(error));
+      showNotice(friendlyErrorMessage(error));
     }
   });
 
@@ -279,13 +335,15 @@ async function bindBackupActions(): Promise<void> {
   qs<HTMLButtonElement>("#export-backup").addEventListener("click", async () => {
     try {
       await ensureVaultUnlocked();
+      if (!confirmEncryptedBackupExport()) return;
       const backupPassphrase = askBackupPassphrase("export");
       const backup = await exportEncryptedHumanKeyBackup(runtime, backupPassphrase);
-      const filename = `${currentDateStamp()}__ABRACADOO__BACKUP__HUMANKEY-LOCAL__V0-5__encrypted.json`;
+      await selfCheckEncryptedBackup(backup, backupPassphrase);
+      const filename = `${currentDateStamp()}__ABRACADOO__BACKUP__HUMANKEY-LOCAL__V0-5-1__encrypted.json`;
       downloadTextFile(filename, JSON.stringify(backup, null, 2), "application/json");
-      showNotice("Encrypted HumanKey backup exported.");
+      showNotice("Encrypted HumanKey backup exported and self-checked.");
     } catch (error) {
-      showNotice(error instanceof Error ? error.message : String(error));
+      showNotice(friendlyErrorMessage(error));
     }
   });
 
@@ -311,7 +369,7 @@ async function bindBackupActions(): Promise<void> {
       );
       await render();
     } catch (error) {
-      showNotice(error instanceof Error ? error.message : String(error));
+      showNotice(friendlyErrorMessage(error));
     } finally {
       input.value = "";
     }
@@ -330,7 +388,7 @@ async function bindCreateForm(): Promise<void> {
     try {
       await ensureVaultUnlocked();
     } catch (error) {
-      showNotice(error instanceof Error ? error.message : String(error));
+      showNotice(friendlyErrorMessage(error));
       return;
     }
 
