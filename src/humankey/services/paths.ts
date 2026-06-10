@@ -199,7 +199,6 @@ export async function importPathInvite(
   if (!contact) throw new Error("Contact not found.");
 
   const createdAt = runtime.clock.nowIso();
-  const receiveKey = await generateInboundPathReceiveKey(runtime);
   const path: HumanKeyPath = {
     id: crypto.randomUUID(),
     contactId: contact.id,

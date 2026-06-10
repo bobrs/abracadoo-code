@@ -51,11 +51,11 @@ Then open the Vite URL shown in the terminal.
 7. Record HumanKey lifecycle events.
 8. Revoke the credential when needed.
 
-## Important security note
+## Current local security note
 
-`IndexedDbSecretVault` currently stores secret bytes in local IndexedDB without encryption. This is acceptable for the V0.3 architecture pass because the vault boundary exists, but it is not the desired long-term security posture.
+The browser runtime uses `EncryptedIndexedDbSecretVault`. Active TOTP secrets and inbound Path receive keys are stored behind the `SecretVault` boundary and encrypted at rest after local vault setup/unlock.
 
-The next security-oriented pass should add an encrypted local vault implementation behind the same `SecretVault` interface.
+Backups are encrypted, passphrase-wrapped JSON by default. Older plaintext backup shapes are still accepted for compatibility and restored through the vault boundary.
 
 ## Architecture pass V0.2
 
@@ -88,13 +88,12 @@ Domain services orchestrate contact, credential, event, policy, vault, and stora
 - `verifyAcquaintanceCode()`
 - `revokeCredential()`
 
-## Next implementation targets
+## Near implementation targets
 
-1. Add automated tests for TOTP generation, verification, revocation, and lifecycle state derivation.
-2. Add encrypted local vault implementation.
-3. Add export/import of HumanKey contacts without raw secret leakage by default.
-4. Add explicit manual transport artifacts for QR/copy/paste exchange.
-5. Add first `HK_PATH_1` placeholder UI after the Acquaintance MVP is stable.
+1. Make manual message exchange more humane with clearer copy/paste and file flows.
+2. Prepare for optional QR display of message packets.
+3. Make Acquaintance, Path, Loop, and Relationship topology easier to scan.
+4. Strengthen installable PWA/offline behavior after load.
 
 ## V0.5: encrypted local vault
 
@@ -145,3 +144,16 @@ V0.6.1 locks in the ecosystem terminology: **Path** replaces **Lane**, and two c
 V0.7 adds the first manual encrypted message exchange profile. Users can export an encrypted manual message over an outbound Path and import/decrypt a message addressed to their inbound Path. Once the local app has witnessed both a sent and received message for a contact, it records `loop.completed` and `relationship.established`.
 
 This preserves the ontology: a Path is one-way, a Loop is two connected Paths, and a Relationship is a witnessed Loop. Manual message artifacts can move over any human-mediated transport; the transport does not define the HumanKey object model.
+
+## V0.7.1: Loop witness confidence
+
+V0.7.1 keeps the V0.7 architecture and makes the first Loop clearer and less surprising:
+
+- importing a Path invite no longer creates unused receive-key secret material
+- backup import restores inbound Path receive keys with the `HK_PATH_1_RECEIVE_KEY` purpose
+- sent-only and received-only manual exchanges do not establish a Relationship
+- repeated witness checks do not duplicate `loop.completed` or `relationship.established`
+- manual message import has friendly errors for malformed artifacts, wrong Paths, wrong Acquaintances, locked vaults, and failed decrypts
+- the UI shows friendly event labels and a selected-Acquaintance Loop / Relationship status area
+
+The witness remains a coarse contact-level Loop witness. Path-pair-specific Loop modeling is a future improvement, not part of this confidence pass.

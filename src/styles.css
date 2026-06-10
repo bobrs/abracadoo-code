@@ -259,6 +259,17 @@ textarea {
   font-size: 0.9rem;
 }
 
+.event-label {
+  display: grid;
+  gap: 0.1rem;
+}
+
+.event-label small {
+  color: #8f887c;
+  font-size: 0.78rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
 .notice {
   position: fixed;
   right: 1rem;
@@ -358,6 +369,35 @@ textarea {
 
 .message-preview small {
   color: #c8c1b4;
+}
+
+.loop-status {
+  margin-top: 1rem;
+  border: 1px solid rgba(158, 230, 216, 0.22);
+  border-radius: 0.9rem;
+  padding: 0.85rem;
+  background: rgba(158, 230, 216, 0.08);
+}
+
+.loop-status strong {
+  display: block;
+  margin-bottom: 0.3rem;
+}
+
+.loop-status p {
+  margin: 0;
+  color: #c8c1b4;
+}
+
+.relationship-status {
+  border-color: rgba(158, 230, 216, 0.42);
+  background: rgba(158, 230, 216, 0.12);
+}
+
+.loop-progress-status,
+.loop-complete-status {
+  border-color: rgba(255, 207, 158, 0.34);
+  background: rgba(255, 207, 158, 0.08);
 }
 
 .status-relationship {

@@ -1,4 +1,5 @@
 import type { AbracadooRuntime } from "../../runtime/AbracadooRuntime";
+import type { CreateSecretInput } from "../../vault/SecretVault";
 import { decryptJsonWithPassphrase, encryptJsonWithPassphrase, type EncryptedPayload } from "../../vault/crypto/passphraseCrypto";
 import type {
   HumanKeyContact,
@@ -131,6 +132,16 @@ function unique<T>(values: T[]): T[] {
   return [...new Set(values)];
 }
 
+function secretPurposeForRef(backup: HumanKeyBackup, secretRef: SecretRef): CreateSecretInput["purpose"] {
+  if (backup.paths.some((path) => path.secretRef === secretRef)) {
+    return "HK_PATH_1_RECEIVE_KEY";
+  }
+  if (backup.credentials.some((credential) => credential.secretRef === secretRef)) {
+    return "HK_TOTP_1";
+  }
+  return "OTHER";
+}
+
 export async function exportHumanKeyBackup(runtime: AbracadooRuntime): Promise<HumanKeyBackup> {
   const contacts = await runtime.storage.listContacts();
   const credentialsNested = await Promise.all(
@@ -209,7 +220,7 @@ export async function importHumanKeyBackup(
 
   for (const secret of backup.secrets) {
     const restoredRef = await runtime.vault.createSecret({
-      purpose: "HK_TOTP_1",
+      purpose: secretPurposeForRef(backup, secret.originalRef),
       material: new Uint8Array(secret.material),
       createdAt: backup.exportedAt,
     });

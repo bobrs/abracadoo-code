@@ -47,6 +47,25 @@ export type ImportManualMessageResult = {
   relationshipEstablished: boolean;
 };
 
+export type ManualMessageErrorCode =
+  | "MALFORMED_ARTIFACT"
+  | "WRONG_PATH"
+  | "WRONG_RECIPIENT"
+  | "VAULT_LOCKED"
+  | "DECRYPT_FAILED";
+
+export class ManualMessageError extends Error {
+  readonly code: ManualMessageErrorCode;
+  readonly originalError?: unknown;
+
+  constructor(code: ManualMessageErrorCode, message: string, originalError?: unknown) {
+    super(message);
+    this.name = "ManualMessageError";
+    this.code = code;
+    if (originalError !== undefined) this.originalError = originalError;
+  }
+}
+
 const textEncoder = new TextEncoder();
 const textDecoder = new TextDecoder();
 
@@ -84,6 +103,15 @@ function serializeJwk(jwk: JsonWebKey): Uint8Array {
 
 function deserializeJwk(bytes: Uint8Array): JsonWebKey {
   return JSON.parse(textDecoder.decode(bytes)) as JsonWebKey;
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function isVaultLockedError(error: unknown): boolean {
+  const message = errorMessage(error).toLowerCase();
+  return message.includes("vault is locked") || message.includes("unlock it before using secret material");
 }
 
 async function deriveAesKeyFromSender(otherPublicJwk: JsonWebKey): Promise<{ key: CryptoKey; ephemeralPublicJwk: JsonWebKey }> {
@@ -135,16 +163,33 @@ async function deriveAesKeyFromRecipient(privateJwk: JsonWebKey, senderEphemeral
 }
 
 function assertManualMessageArtifact(value: unknown): asserts value is ManualMessageArtifact {
-  if (!value || typeof value !== "object") throw new Error("Manual message is not an object.");
+  if (!value || typeof value !== "object") {
+    throw new ManualMessageError("MALFORMED_ARTIFACT", "Manual message artifact is malformed.");
+  }
   const candidate = value as Partial<ManualMessageArtifact>;
   if (candidate.schema !== "ABRACADOO_HUMANKEY_MANUAL_MESSAGE" || candidate.schemaVersion !== 1) {
-    throw new Error("Unsupported Abracadoo HumanKey manual message schema.");
+    throw new ManualMessageError("MALFORMED_ARTIFACT", "Manual message artifact is not a supported Abracadoo manual message.");
   }
-  if (!candidate.message || candidate.message.profile !== "HK_MANUAL_MESSAGE_1") {
-    throw new Error("Manual message is missing its HK_MANUAL_MESSAGE_1 payload.");
+  const message = candidate.message;
+  if (
+    !message ||
+    message.profile !== "HK_MANUAL_MESSAGE_1" ||
+    typeof message.id !== "string" ||
+    typeof message.recipientPathId !== "string" ||
+    typeof message.createdAt !== "string"
+  ) {
+    throw new ManualMessageError("MALFORMED_ARTIFACT", "Manual message artifact is missing its message details.");
   }
-  if (!candidate.message.encryption || candidate.message.encryption.algorithm !== "ECDH-P256-AES-GCM") {
-    throw new Error("Manual message encryption payload is missing or unsupported.");
+  const encryption = message.encryption;
+  if (
+    !encryption ||
+    encryption.algorithm !== "ECDH-P256-AES-GCM" ||
+    !encryption.senderEphemeralPublicKeyJwk ||
+    typeof encryption.senderEphemeralPublicKeyJwk !== "object" ||
+    typeof encryption.iv !== "string" ||
+    typeof encryption.ciphertext !== "string"
+  ) {
+    throw new ManualMessageError("MALFORMED_ARTIFACT", "Manual message artifact is missing its encryption details.");
   }
 }
 
@@ -160,39 +205,66 @@ async function witnessLoopIfReady(runtime: AbracadooRuntime, contact: HumanKeyCo
   const events = await runtime.storage.listEventsForContact(contact.id);
   const hasSent = events.some((event) => event.type === "message.sent");
   const hasReceived = events.some((event) => event.type === "message.received");
-  const hasLoopCompleted = events.some((event) => event.type === "loop.completed");
+  const existingLoopEvent = events.find((event) => event.type === "loop.completed");
   const hasRelationshipEstablished = events.some((event) => event.type === "relationship.established");
 
-  if (!hasSent || !hasReceived || hasLoopCompleted || hasRelationshipEstablished) {
+  if (!hasSent || !hasReceived) {
     return { contact: await saveContactWithDerivedState(runtime, contact), loopCompleted: false, relationshipEstablished: false };
   }
 
   const nowIso = runtime.clock.nowIso();
-  const loopEvent = createHumanKeyEvent({
-    contactId: contact.id,
-    type: "loop.completed",
-    nowIso,
-    data: { basis: "manual_message_exchange", messageSent: true, messageReceived: true },
-  });
-  const relationshipEvent = createHumanKeyEvent({
-    contactId: contact.id,
-    type: "relationship.established",
-    nowIso,
-    data: { basis: "witnessed_loop", loopEventId: loopEvent.id },
-  });
+  const addedEvents: HumanKeyEvent[] = [];
+  let loopEventId = existingLoopEvent?.id;
 
-  await runtime.storage.appendEvent(loopEvent);
-  await runtime.storage.appendEvent(relationshipEvent);
+  if (!existingLoopEvent) {
+    const loopEvent = createHumanKeyEvent({
+      contactId: contact.id,
+      type: "loop.completed",
+      nowIso,
+      data: {
+        basis: "manual_message_exchange",
+        witnessScope: "contact_level",
+        messageSent: true,
+        messageReceived: true,
+      },
+    });
+    await runtime.storage.appendEvent(loopEvent);
+    addedEvents.push(loopEvent);
+    loopEventId = loopEvent.id;
+  }
 
+  if (!hasRelationshipEstablished) {
+    if (!loopEventId) throw new Error("Loop witness is missing a loop event id.");
+    const relationshipEvent = createHumanKeyEvent({
+      contactId: contact.id,
+      type: "relationship.established",
+      nowIso,
+      data: { basis: "witnessed_loop", witnessScope: "contact_level", loopEventId },
+    });
+    await runtime.storage.appendEvent(relationshipEvent);
+    addedEvents.push(relationshipEvent);
+  }
+
+  if (addedEvents.length === 0) {
+    return { contact: await saveContactWithDerivedState(runtime, contact), loopCompleted: false, relationshipEstablished: false };
+  }
+
+  const isRelationship = hasRelationshipEstablished || addedEvents.some((event) => event.type === "relationship.established");
   const updated: HumanKeyContact = {
     ...contact,
-    eventIds: [...contact.eventIds, loopEvent.id, relationshipEvent.id],
-    state: "relationship",
-    establishedRelationshipAt: nowIso,
+    eventIds: [...new Set([...contact.eventIds, ...addedEvents.map((event) => event.id)])],
+    state: isRelationship ? "relationship" : "loop_witnessed",
     updatedAt: nowIso,
   };
+  if (isRelationship) {
+    updated.establishedRelationshipAt = contact.establishedRelationshipAt ?? nowIso;
+  }
   await runtime.storage.saveContact(updated);
-  return { contact: updated, loopCompleted: true, relationshipEstablished: true };
+  return {
+    contact: updated,
+    loopCompleted: addedEvents.some((event) => event.type === "loop.completed"),
+    relationshipEstablished: addedEvents.some((event) => event.type === "relationship.established"),
+  };
 }
 
 export async function generateInboundPathReceiveKey(runtime: AbracadooRuntime): Promise<{ secretRef: string; publicKeyJwk: JsonWebKey }> {
@@ -280,18 +352,41 @@ export async function importManualMessage(
   if (!contact) throw new Error("Contact not found.");
 
   const inboundPath = await runtime.storage.getPath(input.artifact.message.recipientPathId);
-  if (!inboundPath || inboundPath.contactId !== contact.id || inboundPath.direction !== "inbound") {
-    throw new Error("No matching inbound path found for this manual message.");
+  if (!inboundPath) {
+    throw new ManualMessageError("WRONG_PATH", "No matching inbound path found for this manual message.");
   }
-  if (!inboundPath.secretRef) throw new Error("Inbound path is missing private receive-key material.");
+  if (inboundPath.contactId !== contact.id) {
+    throw new ManualMessageError("WRONG_RECIPIENT", "This manual message was addressed to a different Acquaintance.");
+  }
+  if (inboundPath.direction !== "inbound") {
+    throw new ManualMessageError("WRONG_PATH", "This manual message is not addressed to one of your inbound Paths.");
+  }
+  if (!inboundPath.secretRef) {
+    throw new ManualMessageError("WRONG_PATH", "The matching inbound Path is missing its receive key.");
+  }
 
-  const privateJwk = deserializeJwk(await runtime.vault.readSecret(inboundPath.secretRef));
-  const aesKey = await deriveAesKeyFromRecipient(privateJwk, input.artifact.message.encryption.senderEphemeralPublicKeyJwk);
-  const plaintextBytes = await crypto.subtle.decrypt(
-    { name: "AES-GCM", iv: toArrayBuffer(base64ToBytes(input.artifact.message.encryption.iv)) },
-    aesKey,
-    toArrayBuffer(base64ToBytes(input.artifact.message.encryption.ciphertext))
-  );
+  let privateKeyBytes: Uint8Array;
+  try {
+    privateKeyBytes = await runtime.vault.readSecret(inboundPath.secretRef);
+  } catch (error) {
+    if (isVaultLockedError(error)) {
+      throw new ManualMessageError("VAULT_LOCKED", "Local vault is locked. Unlock it before opening this message.", error);
+    }
+    throw new ManualMessageError("WRONG_PATH", "The matching inbound Path could not read its receive key.", error);
+  }
+
+  let plaintextBytes: ArrayBuffer;
+  try {
+    const privateJwk = deserializeJwk(privateKeyBytes);
+    const aesKey = await deriveAesKeyFromRecipient(privateJwk, input.artifact.message.encryption.senderEphemeralPublicKeyJwk);
+    plaintextBytes = await crypto.subtle.decrypt(
+      { name: "AES-GCM", iv: toArrayBuffer(base64ToBytes(input.artifact.message.encryption.iv)) },
+      aesKey,
+      toArrayBuffer(base64ToBytes(input.artifact.message.encryption.ciphertext))
+    );
+  } catch (error) {
+    throw new ManualMessageError("DECRYPT_FAILED", "This manual message could not be decrypted with this Path.", error);
+  }
   const plaintext = textDecoder.decode(plaintextBytes);
 
   const nowIso = runtime.clock.nowIso();

@@ -9,6 +9,7 @@ import {
   createManualMessage,
   importManualMessage,
   isEncryptedHumanKeyBackup,
+  ManualMessageError,
   recordCredentialShared,
   recordPathShared,
   createInboundPath,
@@ -76,6 +77,72 @@ function formatDate(value?: string): string {
     dateStyle: "medium",
     timeStyle: "short",
   }).format(new Date(value));
+}
+
+function friendlyEventLabel(type: HumanKeyEvent["type"]): string {
+  const labels: Record<HumanKeyEvent["type"], string> = {
+    "contact.created": "Acquaintance created",
+    "contact.state_changed": "Status changed",
+    "credential.created": "Authenticator token created",
+    "credential.shared": "Credential shared",
+    "credential.verified": "Code verified",
+    "credential.failed_verification": "Code not verified",
+    "credential.revoked": "Credential revoked",
+    "path.created": "Inbound Path created",
+    "path.shared": "Path invite shared",
+    "path.imported": "Path invite imported",
+    "lane.created": "Legacy Path created",
+    "lane.shared": "Legacy Path shared",
+    "lane.imported": "Legacy Path imported",
+    "message.sent": "Message sent",
+    "message.received": "Message received",
+    "loop.completed": "Loop completed",
+    "relationship.established": "Relationship established",
+    "contact.revoked": "Acquaintance revoked",
+    "contact.archived": "Acquaintance archived",
+  };
+  return labels[type];
+}
+
+function renderLoopStatus(events: HumanKeyEvent[], contact: HumanKeyContact): string {
+  const sentCount = events.filter((event) => event.type === "message.sent").length;
+  const receivedCount = events.filter((event) => event.type === "message.received").length;
+  const hasLoopCompleted = events.some((event) => event.type === "loop.completed");
+  const hasRelationshipEstablished = events.some((event) => event.type === "relationship.established");
+
+  if (hasRelationshipEstablished || contact.state === "relationship") {
+    return `
+      <div class="loop-status relationship-status">
+        <strong>Relationship established</strong>
+        <p>A Loop has been witnessed for this Acquaintance. Trust flows in loops, one loop at a time.</p>
+      </div>
+    `;
+  }
+
+  if (hasLoopCompleted) {
+    return `
+      <div class="loop-status loop-complete-status">
+        <strong>Loop witnessed</strong>
+        <p>This app has seen a sent and received manual message for this Acquaintance.</p>
+      </div>
+    `;
+  }
+
+  if (sentCount > 0 || receivedCount > 0) {
+    return `
+      <div class="loop-status loop-progress-status">
+        <strong>Loop in progress</strong>
+        <p>This contact-level Loop witness needs both a sent and received manual message. Sent: ${sentCount}. Received: ${receivedCount}.</p>
+      </div>
+    `;
+  }
+
+  return `
+    <div class="loop-status loop-empty-status">
+      <strong>No Loop witnessed yet</strong>
+      <p>A Path is one-way. A Relationship appears after this app has witnessed both a sent and received manual message.</p>
+    </div>
+  `;
 }
 
 async function getSelectedContactBundle(): Promise<{
@@ -159,6 +226,8 @@ async function renderSelectedContact(): Promise<void> {
         <span class="pill">${credential?.profile ?? "no credential"}</span>
       </div>
 
+      ${renderLoopStatus(events, contact)}
+
       <div class="grid two">
         <div>
           <h3>Authenticator token</h3>
@@ -229,7 +298,7 @@ async function renderSelectedContact(): Promise<void> {
         <div class="section-heading">
           <div>
             <h3>Manual message exchange</h3>
-            <p class="help">Export an encrypted message file through an outbound path, or import one sent to your inbound path. The artifact can travel by copy/paste, email, SMS, QR, paper, or any transport you trust long enough.</p>
+            <p class="help">Export an encrypted message file through an outbound Path, or import one sent to your inbound Path. Send this file by any carrier. The Path secures the message, not the carrier.</p>
           </div>
           <span class="pill">HK_MANUAL_MESSAGE_1</span>
         </div>
@@ -240,12 +309,12 @@ async function renderSelectedContact(): Promise<void> {
               <textarea id="manual-message-text" placeholder="Write a short message for this path..." ${paths.some((path) => path.direction === "outbound" && !path.lifecycle.revokedAt && path.transport.kind === "local" && path.transport.receivePublicKeyJwk) ? "" : "disabled"}></textarea>
             </label>
             <button type="submit" ${paths.some((path) => path.direction === "outbound" && !path.lifecycle.revokedAt && path.transport.kind === "local" && path.transport.receivePublicKeyJwk) ? "" : "disabled"}>Export encrypted manual message</button>
-            <p class="help">Requires an outbound path imported from their path invite.</p>
+            <p class="help">Requires an outbound Path imported from their Path invite.</p>
           </form>
           <div class="stack">
             <button id="import-manual-message-trigger" type="button" ${paths.some((path) => path.direction === "inbound" && !path.lifecycle.revokedAt && path.secretRef) ? "" : "disabled"}>Import encrypted manual message</button>
             <input id="import-manual-message-file" type="file" accept="application/json,.json" hidden />
-            <p class="help">Requires your inbound path private receive key, held in the local vault.</p>
+            <p class="help">Requires your inbound Path private receive key, held in the local vault.</p>
             ${lastReceivedManualMessage?.contactId === contact.id ? `<div class="message-preview"><strong>Last decrypted message</strong><p>${escapeHtml(lastReceivedManualMessage.plaintext)}</p><small>${formatDate(lastReceivedManualMessage.at)}</small></div>` : ""}
           </div>
         </div>
@@ -255,7 +324,17 @@ async function renderSelectedContact(): Promise<void> {
       <ol class="events">
         ${events
           .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-          .map((event) => `<li><strong>${event.type}</strong><span>${formatDate(event.createdAt)}</span></li>`)
+          .map(
+            (event) => `
+              <li>
+                <div class="event-label">
+                  <strong>${friendlyEventLabel(event.type)}</strong>
+                  <small>${event.type}</small>
+                </div>
+                <span>${formatDate(event.createdAt)}</span>
+              </li>
+            `
+          )
           .join("")}
       </ol>
     </section>
@@ -464,6 +543,20 @@ function askBackupPassphrase(action: "export" | "import"): string {
 }
 
 function friendlyErrorMessage(error: unknown): string {
+  if (error instanceof ManualMessageError) {
+    switch (error.code) {
+      case "MALFORMED_ARTIFACT":
+        return "That file does not look like an Abracadoo manual message. Check the file and try again.";
+      case "WRONG_PATH":
+        return "This message is not addressed to one of this Acquaintance’s inbound Paths.";
+      case "WRONG_RECIPIENT":
+        return "This message was made for a different Acquaintance. Select the right person and try again.";
+      case "VAULT_LOCKED":
+        return "Unlock your local vault before opening this message.";
+      case "DECRYPT_FAILED":
+        return "This message could not be opened with this Path. Ask for a fresh message or check that the right Path invite was used.";
+    }
+  }
   const message = error instanceof Error ? error.message : String(error);
   if (message.includes("decrypt") || message.includes("operation failed") || message.includes("did not unlock")) {
     return "That passphrase did not unlock the vault or backup. Try again, and check for typos.";
