@@ -2,6 +2,7 @@ import type { AbracadooRuntime } from "../../runtime/AbracadooRuntime";
 import { deriveContactState } from "../contacts/deriveContactState";
 import { createHumanKeyEvent } from "../events/createEvent";
 import type { HumanKeyContact, HumanKeyPath, PathId } from "../model/types";
+import { generateInboundPathReceiveKey } from "./manualMessages";
 
 export type HumanKeyPathInvite = {
   schema: "ABRACADOO_HUMANKEY_PATH_INVITE";
@@ -116,14 +117,17 @@ export async function createInboundPath(
   if (!contact) throw new Error("Contact not found.");
 
   const createdAt = runtime.clock.nowIso();
+  const receiveKey = await generateInboundPathReceiveKey(runtime);
   const path: HumanKeyPath = {
     id: crypto.randomUUID(),
     contactId: contact.id,
     profile: "HK_PATH_1",
     direction: "inbound",
+    secretRef: receiveKey.secretRef,
     transport: {
       kind: "local",
       descriptor: input.descriptor?.trim() || `manual-path:${crypto.randomUUID()}`,
+      receivePublicKeyJwk: receiveKey.publicKeyJwk,
     },
     policy: {
       requiresCredentialIds: input.requiresCredentialIds ?? contact.credentialIds,
@@ -195,11 +199,13 @@ export async function importPathInvite(
   if (!contact) throw new Error("Contact not found.");
 
   const createdAt = runtime.clock.nowIso();
+  const receiveKey = await generateInboundPathReceiveKey(runtime);
   const path: HumanKeyPath = {
     id: crypto.randomUUID(),
     contactId: contact.id,
     profile: "HK_PATH_1",
     direction: "outbound",
+    remotePathId: invitePath.inviteId,
     transport: invitePath.transport,
     policy: invitePath.policy,
     lifecycle: { createdAt },

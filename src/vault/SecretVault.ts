@@ -1,7 +1,7 @@
 import type { SecretRef } from "../humankey/model/types";
 
 export type CreateSecretInput = {
-  purpose: "HK_TOTP_1" | "HK_APP_KEY_1" | "OTHER";
+  purpose: "HK_TOTP_1" | "HK_PATH_1_RECEIVE_KEY" | "HK_APP_KEY_1" | "OTHER";
   material: Uint8Array;
   createdAt?: string;
 };

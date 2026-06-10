@@ -333,3 +333,38 @@ textarea {
   background: rgba(255, 242, 180, 0.16);
   color: #fff2b4;
 }
+
+.path-panel {
+  margin-top: 1rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+  padding-top: 1rem;
+}
+
+.manual-message-panel {
+  border-color: rgba(255, 180, 92, 0.28);
+}
+
+.message-preview {
+  border: 1px solid rgba(158, 230, 216, 0.25);
+  border-radius: 0.9rem;
+  padding: 0.85rem;
+  background: rgba(158, 230, 216, 0.08);
+}
+
+.message-preview p {
+  white-space: pre-wrap;
+  margin: 0.4rem 0;
+}
+
+.message-preview small {
+  color: #c8c1b4;
+}
+
+.status-relationship {
+  color: #9ee6d8 !important;
+}
+
+.status-loop-offered,
+.status-loop-witnessed {
+  color: #ffcf9e !important;
+}

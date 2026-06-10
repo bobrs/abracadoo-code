@@ -139,3 +139,9 @@ V0.6.1 locks in the ecosystem terminology: **Path** replaces **Lane**, and two c
 - Domain types and services now use `HumanKeyPath`, `PathId`, `createInboundPath()`, `recordPathShared()`, and `importPathInvite()`.
 - Legacy V0.6 lane invites/backups/events are still accepted and normalized during import.
 - Relationship remains gated on a future witnessed/completed Loop.
+
+## V0.7 Loop witness / manual message exchange
+
+V0.7 adds the first manual encrypted message exchange profile. Users can export an encrypted manual message over an outbound Path and import/decrypt a message addressed to their inbound Path. Once the local app has witnessed both a sent and received message for a contact, it records `loop.completed` and `relationship.established`.
+
+This preserves the ontology: a Path is one-way, a Loop is two connected Paths, and a Relationship is a witnessed Loop. Manual message artifacts can move over any human-mediated transport; the transport does not define the HumanKey object model.

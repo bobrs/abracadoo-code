@@ -142,7 +142,10 @@ export async function exportHumanKeyBackup(runtime: AbracadooRuntime): Promise<H
   const credentials = credentialsNested.flat();
   const paths = pathsNested.flat();
   const events = eventsNested.flat();
-  const secretRefs = unique(credentials.map((credential) => credential.secretRef));
+  const secretRefs = unique([
+    ...credentials.map((credential) => credential.secretRef),
+    ...paths.map((path) => path.secretRef).filter((ref): ref is string => Boolean(ref)),
+  ]);
   const secrets: HumanKeyBackupSecret[] = [];
 
   for (const secretRef of secretRefs) {
@@ -151,8 +154,10 @@ export async function exportHumanKeyBackup(runtime: AbracadooRuntime): Promise<H
       secrets.push({ originalRef: secretRef, material: Array.from(material) });
     } catch (error) {
       const credentialsUsingSecret = credentials.filter((credential) => credential.secretRef === secretRef);
+      const pathsUsingSecret = paths.filter((path) => path.secretRef === secretRef);
       const allCredentialsRevoked = credentialsUsingSecret.every((credential) => credential.lifecycle.revokedAt);
-      if (!allCredentialsRevoked) {
+      const allPathsRevoked = pathsUsingSecret.every((path) => path.lifecycle.revokedAt);
+      if (!allCredentialsRevoked || !allPathsRevoked) {
         throw error;
       }
     }
@@ -224,7 +229,13 @@ export async function importHumanKeyBackup(
   }
 
   for (const path of backup.paths) {
-    await runtime.storage.savePath(path);
+    const restoredSecretRef = path.secretRef ? secretRefMap.get(path.secretRef) : undefined;
+    if (path.secretRef && !restoredSecretRef && !path.lifecycle.revokedAt) {
+      throw new Error(`Missing secret material for path: ${path.id}`);
+    }
+    const restoredPath = { ...path };
+    if (restoredSecretRef) restoredPath.secretRef = restoredSecretRef;
+    await runtime.storage.savePath(restoredPath);
   }
 
   for (const event of backup.events) {

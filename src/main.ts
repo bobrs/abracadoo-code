@@ -6,6 +6,8 @@ import {
   exportEncryptedHumanKeyBackup,
   importHumanKeyBackup,
   importPathInvite,
+  createManualMessage,
+  importManualMessage,
   isEncryptedHumanKeyBackup,
   recordCredentialShared,
   recordPathShared,
@@ -20,6 +22,7 @@ import "./styles.css";
 const runtime = createBrowserRuntime();
 let selectedContactId: string | undefined;
 let currentQrUri: string | undefined;
+let lastReceivedManualMessage: { contactId: string; plaintext: string; at: string } | undefined;
 
 type ContactUiStatus = {
   label: string;
@@ -193,7 +196,7 @@ async function renderSelectedContact(): Promise<void> {
         <div class="section-heading">
           <div>
             <h3>Message paths</h3>
-            <p class="help">V0.6 creates and exchanges path invites only. It does not send messages or establish a Relationship yet.</p>
+            <p class="help">V0.7 creates manual encrypted message artifacts. A Relationship is established only after this app has witnessed both a sent and a received message.</p>
           </div>
           <span class="pill">HK_PATH_1</span>
         </div>
@@ -216,8 +219,36 @@ async function renderSelectedContact(): Promise<void> {
         <dl class="facts path-facts">
           <div><dt>Inbound paths</dt><dd>${paths.filter((path) => path.direction === "inbound" && !path.lifecycle.revokedAt).length}</dd></div>
           <div><dt>Outbound paths</dt><dd>${paths.filter((path) => path.direction === "outbound" && !path.lifecycle.revokedAt).length}</dd></div>
-          <div><dt>Relationship</dt><dd>Still not established by path exchange alone</dd></div>
+          <div><dt>Messages sent</dt><dd>${events.filter((event) => event.type === "message.sent").length}</dd></div>
+          <div><dt>Messages received</dt><dd>${events.filter((event) => event.type === "message.received").length}</dd></div>
+          <div><dt>Relationship</dt><dd>${contact.state === "relationship" ? "Established by witnessed loop" : "Requires sent + received messages"}</dd></div>
         </dl>
+      </section>
+
+      <section class="path-panel manual-message-panel">
+        <div class="section-heading">
+          <div>
+            <h3>Manual message exchange</h3>
+            <p class="help">Export an encrypted message file through an outbound path, or import one sent to your inbound path. The artifact can travel by copy/paste, email, SMS, QR, paper, or any transport you trust long enough.</p>
+          </div>
+          <span class="pill">HK_MANUAL_MESSAGE_1</span>
+        </div>
+        <div class="grid two">
+          <form id="manual-message-form" class="stack">
+            <label>
+              Message to encrypt
+              <textarea id="manual-message-text" placeholder="Write a short message for this path..." ${paths.some((path) => path.direction === "outbound" && !path.lifecycle.revokedAt && path.transport.kind === "local" && path.transport.receivePublicKeyJwk) ? "" : "disabled"}></textarea>
+            </label>
+            <button type="submit" ${paths.some((path) => path.direction === "outbound" && !path.lifecycle.revokedAt && path.transport.kind === "local" && path.transport.receivePublicKeyJwk) ? "" : "disabled"}>Export encrypted manual message</button>
+            <p class="help">Requires an outbound path imported from their path invite.</p>
+          </form>
+          <div class="stack">
+            <button id="import-manual-message-trigger" type="button" ${paths.some((path) => path.direction === "inbound" && !path.lifecycle.revokedAt && path.secretRef) ? "" : "disabled"}>Import encrypted manual message</button>
+            <input id="import-manual-message-file" type="file" accept="application/json,.json" hidden />
+            <p class="help">Requires your inbound path private receive key, held in the local vault.</p>
+            ${lastReceivedManualMessage?.contactId === contact.id ? `<div class="message-preview"><strong>Last decrypted message</strong><p>${escapeHtml(lastReceivedManualMessage.plaintext)}</p><small>${formatDate(lastReceivedManualMessage.at)}</small></div>` : ""}
+          </div>
+        </div>
       </section>
 
       <h3>HumanKey event spine</h3>
@@ -260,9 +291,15 @@ function bindSelectedContactActions(contact: HumanKeyContact, credential: HumanK
   });
 
   qs<HTMLButtonElement>("#create-inbound-path").addEventListener("click", async () => {
+    try {
+      await ensureVaultUnlocked();
+    } catch (error) {
+      showNotice(friendlyErrorMessage(error));
+      return;
+    }
     const result = await createInboundPath(runtime, { contactId: contact.id });
     downloadTextFile(
-      `${currentDateStamp()}__ABRACADOO__INVITE__HUMANKEY-PATH__V0-6-1__${safeFilename(contact.displayName)}.json`,
+      `${currentDateStamp()}__ABRACADOO__INVITE__HUMANKEY-PATH__V0-7__${safeFilename(contact.displayName)}.json`,
       JSON.stringify(result.invite, null, 2),
       "application/json"
     );
@@ -277,7 +314,7 @@ function bindSelectedContactActions(contact: HumanKeyContact, credential: HumanK
     if (!inboundPath) return;
     const invite = await recordPathShared(runtime, inboundPath.id);
     downloadTextFile(
-      `${currentDateStamp()}__ABRACADOO__INVITE__HUMANKEY-PATH__V0-6-1__${safeFilename(contact.displayName)}.json`,
+      `${currentDateStamp()}__ABRACADOO__INVITE__HUMANKEY-PATH__V0-7__${safeFilename(contact.displayName)}.json`,
       JSON.stringify(invite, null, 2),
       "application/json"
     );
@@ -298,6 +335,54 @@ function bindSelectedContactActions(contact: HumanKeyContact, credential: HumanK
       const invite = JSON.parse(await file.text()) as unknown;
       await importPathInvite(runtime, { contactId: contact.id, invite });
       showNotice("Path invite imported as an outbound path. Relationship is still not established.");
+      await render();
+    } catch (error) {
+      showNotice(friendlyErrorMessage(error));
+    } finally {
+      input.value = "";
+    }
+  });
+
+  qs<HTMLFormElement>("#manual-message-form").addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const outboundPath = paths
+      .filter((path) => path.direction === "outbound" && !path.lifecycle.revokedAt && path.transport.kind === "local" && path.transport.receivePublicKeyJwk)
+      .sort((a, b) => b.lifecycle.createdAt.localeCompare(a.lifecycle.createdAt))[0];
+    if (!outboundPath) return;
+    const plaintext = qs<HTMLTextAreaElement>("#manual-message-text").value.trim();
+    if (!plaintext) {
+      showNotice("Write a message before exporting.");
+      return;
+    }
+    try {
+      const result = await createManualMessage(runtime, { contactId: contact.id, outboundPathId: outboundPath.id, plaintext });
+      downloadTextFile(
+        `${currentDateStamp()}__ABRACADOO__MESSAGE__HUMANKEY-MANUAL__V0-7__${safeFilename(contact.displayName)}.json`,
+        JSON.stringify(result.artifact, null, 2),
+        "application/json"
+      );
+      showNotice("Encrypted manual message exported. A loop is witnessed only after sent and received messages exist.");
+      await render();
+    } catch (error) {
+      showNotice(friendlyErrorMessage(error));
+    }
+  });
+
+  qs<HTMLButtonElement>("#import-manual-message-trigger").addEventListener("click", () => {
+    qs<HTMLInputElement>("#import-manual-message-file").click();
+  });
+
+  qs<HTMLInputElement>("#import-manual-message-file").addEventListener("change", async (event) => {
+    const input = event.currentTarget as HTMLInputElement;
+    const file = input.files?.[0];
+    if (!file) return;
+
+    try {
+      await ensureVaultUnlocked();
+      const artifact = JSON.parse(await file.text()) as unknown;
+      const result = await importManualMessage(runtime, { contactId: contact.id, artifact });
+      lastReceivedManualMessage = { contactId: contact.id, plaintext: result.plaintext, at: runtime.clock.nowIso() };
+      showNotice(result.relationshipEstablished ? "Manual message decrypted. Loop witnessed; Relationship established." : "Manual message decrypted and received.");
       await render();
     } catch (error) {
       showNotice(friendlyErrorMessage(error));
@@ -426,7 +511,7 @@ async function bindBackupActions(): Promise<void> {
       const backupPassphrase = askBackupPassphrase("export");
       const backup = await exportEncryptedHumanKeyBackup(runtime, backupPassphrase);
       await selfCheckEncryptedBackup(backup, backupPassphrase);
-      const filename = `${currentDateStamp()}__ABRACADOO__BACKUP__HUMANKEY-LOCAL__V0-6-1__encrypted.json`;
+      const filename = `${currentDateStamp()}__ABRACADOO__BACKUP__HUMANKEY-LOCAL__V0-7__encrypted.json`;
       downloadTextFile(filename, JSON.stringify(backup, null, 2), "application/json");
       showNotice("Encrypted HumanKey backup exported and self-checked.");
     } catch (error) {

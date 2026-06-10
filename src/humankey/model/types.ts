@@ -3,6 +3,7 @@ export type ContactId = string;
 export type CredentialId = string;
 export type PathId = string;
 export type EventId = string;
+export type MessageId = string;
 export type SecretRef = string;
 
 export type HumanKeyContactState =
@@ -68,11 +69,15 @@ export type HumanKeyPath = {
   contactId: ContactId;
   profile: "HK_PATH_1";
   direction: PathDirection;
+  /** For outbound paths, the corresponding inbound path id from the counterparty's invite. */
+  remotePathId?: PathId;
   transport:
     | { kind: "none" }
     | { kind: "nostr"; relays: string[]; publicKey: string }
     | { kind: "webpush"; endpoint: string }
-    | { kind: "local"; descriptor: string };
+    | { kind: "local"; descriptor: string; receivePublicKeyJwk?: JsonWebKey };
+  /** Optional private receive-key reference for inbound paths. Public key material can appear in transport. */
+  secretRef?: SecretRef;
   policy: {
     requiresCredentialIds: CredentialId[];
     requiresHumanKeyEvent?: boolean;

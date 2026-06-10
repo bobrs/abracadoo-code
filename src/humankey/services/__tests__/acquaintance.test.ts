@@ -8,6 +8,8 @@ import {
   exportHumanKeyBackup,
   importHumanKeyBackup,
   importPathInvite,
+  createManualMessage,
+  importManualMessage,
   revokeCredential,
   recordPathShared,
   verifyAcquaintanceCode,
@@ -157,6 +159,88 @@ describe("HumanKey Acquaintance HK_TOTP_1", () => {
     const restoredContact = await restoredRuntime.storage.getContact(restored.contact.id);
     expect(restoredContact?.state).toBe("loop_offered");
     expect(restoredContact?.state).not.toBe("relationship");
+  });
+
+
+  it("exchanges encrypted manual messages and establishes a Relationship after a witnessed Loop", async () => {
+    const aliceRuntime = createLocalRuntime();
+    const bobRuntime = createLocalRuntime();
+
+    const aliceViewOfBob = await createAcquaintanceWithTotp(aliceRuntime, { displayName: "Bob" });
+    const bobViewOfAlice = await createAcquaintanceWithTotp(bobRuntime, { displayName: "Alice" });
+
+    const aliceInbound = await createInboundPath(aliceRuntime, { contactId: aliceViewOfBob.contact.id });
+    const bobInbound = await createInboundPath(bobRuntime, { contactId: bobViewOfAlice.contact.id });
+
+    const aliceInvite = await recordPathShared(aliceRuntime, aliceInbound.path.id);
+    const bobInvite = await recordPathShared(bobRuntime, bobInbound.path.id);
+
+    const bobOutbound = await importPathInvite(bobRuntime, { contactId: bobViewOfAlice.contact.id, invite: aliceInvite });
+    const aliceOutbound = await importPathInvite(aliceRuntime, { contactId: aliceViewOfBob.contact.id, invite: bobInvite });
+
+    const aliceMessageText = "Hello Bob. This crossed a manual path.";
+    const bobMessageText = "Hello Alice. Loop witnessed.";
+
+    const aliceMessage = await createManualMessage(aliceRuntime, {
+      contactId: aliceViewOfBob.contact.id,
+      outboundPathId: aliceOutbound.path.id,
+      plaintext: aliceMessageText,
+    });
+    const bobMessage = await createManualMessage(bobRuntime, {
+      contactId: bobViewOfAlice.contact.id,
+      outboundPathId: bobOutbound.path.id,
+      plaintext: bobMessageText,
+    });
+
+    expect(JSON.stringify(aliceMessage.artifact)).not.toContain(aliceMessageText);
+    expect(JSON.stringify(bobMessage.artifact)).not.toContain(bobMessageText);
+
+    const aliceImport = await importManualMessage(aliceRuntime, {
+      contactId: aliceViewOfBob.contact.id,
+      artifact: bobMessage.artifact,
+    });
+    const bobImport = await importManualMessage(bobRuntime, {
+      contactId: bobViewOfAlice.contact.id,
+      artifact: aliceMessage.artifact,
+    });
+
+    expect(aliceImport.plaintext).toBe(bobMessageText);
+    expect(bobImport.plaintext).toBe(aliceMessageText);
+    expect(aliceImport.relationshipEstablished).toBe(true);
+    expect(bobImport.relationshipEstablished).toBe(true);
+
+    const aliceContact = await aliceRuntime.storage.getContact(aliceViewOfBob.contact.id);
+    const bobContact = await bobRuntime.storage.getContact(bobViewOfAlice.contact.id);
+    expect(aliceContact?.state).toBe("relationship");
+    expect(bobContact?.state).toBe("relationship");
+  });
+
+  it("exports and imports inbound path receive keys so manual messages still decrypt", async () => {
+    const receiverRuntime = createLocalRuntime();
+    const senderRuntime = createLocalRuntime();
+
+    const receiverContact = await createAcquaintanceWithTotp(receiverRuntime, { displayName: "Sender" });
+    const senderContact = await createAcquaintanceWithTotp(senderRuntime, { displayName: "Receiver" });
+    const receiverInbound = await createInboundPath(receiverRuntime, { contactId: receiverContact.contact.id });
+    const receiverInvite = await recordPathShared(receiverRuntime, receiverInbound.path.id);
+    const senderOutbound = await importPathInvite(senderRuntime, { contactId: senderContact.contact.id, invite: receiverInvite });
+
+    const artifact = (await createManualMessage(senderRuntime, {
+      contactId: senderContact.contact.id,
+      outboundPathId: senderOutbound.path.id,
+      plaintext: "Restored vault path key works.",
+    })).artifact;
+
+    const backup = await exportHumanKeyBackup(receiverRuntime);
+    const restoredReceiver = createLocalRuntime();
+    await importHumanKeyBackup(restoredReceiver, backup);
+
+    const imported = await importManualMessage(restoredReceiver, {
+      contactId: receiverContact.contact.id,
+      artifact,
+    });
+
+    expect(imported.plaintext).toBe("Restored vault path key works.");
   });
 
 });
