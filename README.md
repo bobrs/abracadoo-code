@@ -192,3 +192,14 @@ Manual sealed messages are intentionally tiny for now: newly created `HK_MANUAL_
 This is an Abracadoo.app MVP profile constraint, not a universal HumanKey or Abracadabracadoo protocol limit. It keeps the first exchange simple, prepares for future QR/image carriers, and preserves the current rule: the Path secures the message, not the carrier.
 
 Older valid sealed-message artifacts remain importable. LoopWitness and Relationship semantics are unchanged.
+
+## V0.8.2 - Inbound Path opening no longer auto-downloads
+
+Opening an inbound Path now only creates the local receiving Path and prepares the Path invite text in the panel. It does not automatically save/download an invite file.
+
+This keeps the ritual clearer:
+
+- Open inbound Path: creates the local receiving Path and keeps the private receive key in the vault.
+- Export or Copy Path invite: deliberately creates the shareable artifact for the other person.
+
+The Path invite remains public/shareable invite material. It is not a vault backup and does not contain the private receive key.

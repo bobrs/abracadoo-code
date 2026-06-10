@@ -394,14 +394,14 @@ async function renderSelectedContact(): Promise<void> {
         <div class="grid two">
           <div>
             <h4>Open inbound Path</h4>
-            <p class="help">Share your Path invite so this person can send sealed notes to you. Send this by any carrier.</p>
+            <p class="help">Open an inbound Path locally. Your private receive key stays in your vault. Export or copy the Path invite only when you are ready to share it.</p>
             <div class="button-row">
               <button id="create-inbound-path" type="button">Open inbound Path</button>
               <button id="export-path-invite" type="button" ${inboundPaths.length > 0 ? "" : "disabled"}>Export Path invite</button>
             </div>
             <label>
               Path invite text
-              <textarea id="path-invite-output" class="artifact-textarea" readonly placeholder="Open or export a Path invite to copy it here.">${escapeHtml(pathInviteText)}</textarea>
+              <textarea id="path-invite-output" class="artifact-textarea" readonly placeholder="Open an inbound Path to prepare an invite here, then export or copy it when you are ready to share.">${escapeHtml(pathInviteText)}</textarea>
             </label>
             <div class="button-row">
               <button id="copy-path-invite-text" type="button" ${pathInviteText ? "" : "disabled"}>Copy Path invite</button>
@@ -580,12 +580,7 @@ function bindSelectedContactActions(contact: HumanKeyContact, credential: HumanK
       const result = await createInboundPath(runtime, { contactId: contact.id });
       const inviteText = stringifyArtifactText(result.invite);
       lastPathInviteText = { contactId: contact.id, text: inviteText };
-      downloadTextFile(
-        `${currentDateStamp()}__ABRACADOO__INVITE__HUMANKEY-PATH__V0-8__${safeFilename(contact.displayName)}.json`,
-        inviteText,
-        "application/json"
-      );
-      showNotice("Inbound Path opened. Share this Path invite so they can send sealed notes to you.");
+      showNotice("Inbound Path opened. Use Export or Copy Path invite when you are ready to share it.");
       await render();
     } catch (error) {
       showNotice(friendlyErrorMessage(error));
