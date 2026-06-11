@@ -1031,8 +1031,7 @@ async function main(): Promise<void> {
   });
   await render();
 
-  const isLocalhost = ["localhost", "127.0.0.1", "::1"].includes(window.location.hostname);
-  if ("serviceWorker" in navigator && !isLocalhost) {
+  if ("serviceWorker" in navigator) {
     await navigator.serviceWorker.register("/service-worker.js");
   }
 }

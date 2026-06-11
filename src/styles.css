@@ -45,6 +45,57 @@ button:disabled {
   padding: 2rem 0 4rem;
 }
 
+.app-header {
+  position: sticky;
+  top: 0.75rem;
+  z-index: 20;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1rem;
+  padding: 0.8rem 0.95rem;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 1rem;
+  background: rgba(17, 19, 24, 0.84);
+  backdrop-filter: blur(14px);
+  box-shadow: 0 0.75rem 2rem rgba(0, 0, 0, 0.16);
+}
+
+.brand-lockup {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  min-width: 0;
+}
+
+.brand-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  flex: 0 0 2rem;
+}
+
+.brand-text {
+  display: grid;
+  gap: 0.08rem;
+  min-width: 0;
+}
+
+.brand-text strong {
+  color: #f6f2ea;
+  font-size: 1rem;
+  line-height: 1.1;
+}
+
+.brand-text span {
+  color: #9ee6d8;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
 .hero {
   display: flex;
   justify-content: space-between;
@@ -230,6 +281,13 @@ textarea {
 .storage-unsupported {
   background: rgba(200, 193, 180, 0.14);
   color: #c8c1b4;
+}
+
+@media (max-width: 640px) {
+  .app-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
 }
 
 #qr-canvas {
