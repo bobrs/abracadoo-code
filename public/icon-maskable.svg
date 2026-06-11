@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Abracadoo maskable">
+  <rect width="512" height="512" rx="144" fill="#111318" />
+  <circle cx="176" cy="224" r="48" fill="#9ee6d8" />
+  <circle cx="338" cy="286" r="48" fill="#f6f2ea" />
+  <path d="M208 224 L300 286" fill="none" stroke="#9ee6d8" stroke-width="22" stroke-linecap="round" />
+  <path d="M162 344C184 306 214 280 254 270" fill="none" stroke="#ffcf9e" stroke-width="18" stroke-linecap="round" />
+  <path d="M252 132C326 132 374 188 374 258" fill="none" stroke="#f6f2ea" stroke-width="18" stroke-linecap="round" />
+  <circle cx="256" cy="256" r="24" fill="#111318" stroke="#9ee6d8" stroke-width="12" />
+</svg>

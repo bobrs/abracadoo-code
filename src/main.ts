@@ -776,6 +776,42 @@ async function refreshVaultStatus(): Promise<void> {
         : "Set up the local encrypted vault before creating an Acquaintance.";
 }
 
+async function refreshConnectivityStatus(): Promise<void> {
+  const status = qs<HTMLElement>("#connection-status");
+  const online = navigator.onLine;
+  status.textContent = online ? "online" : "offline";
+  status.className = `pill ${online ? "connection-online" : "connection-offline"}`;
+  status.title = online
+    ? "Network access is available. The app shell can still work offline after first load."
+    : "Network access is offline. Cached app shell and local vault features can still work if they were previously loaded.";
+}
+
+async function refreshPersistentStorageStatus(): Promise<void> {
+  const status = qs<HTMLElement>("#storage-status");
+  const storageManager = navigator.storage;
+  if (!storageManager || typeof storageManager.persist !== "function") {
+    status.textContent = "storage standard";
+    status.className = "pill storage-unsupported";
+    status.title = "Persistent storage is not supported by this browser.";
+    return;
+  }
+
+  const persisted = typeof storageManager.persisted === "function" ? await storageManager.persisted() : false;
+  if (persisted) {
+    status.textContent = "storage persistent";
+    status.className = "pill storage-persistent";
+    status.title = "The browser has already granted persistent storage for this origin.";
+    return;
+  }
+
+  const granted = await storageManager.persist();
+  status.textContent = granted ? "storage persistent" : "storage standard";
+  status.className = granted ? "pill storage-persistent" : "pill storage-standard";
+  status.title = granted
+    ? "Persistent storage was granted. The browser is less likely to evict this site's data."
+    : "Persistent storage was not granted. The app can still work, but browser storage remains best-effort.";
+}
+
 function getVaultPassphraseFromUi(): string {
   return qs<HTMLInputElement>("#vault-passphrase").value;
 }
@@ -985,10 +1021,19 @@ async function main(): Promise<void> {
   await bindCreateForm();
   await bindBackupActions();
   await refreshVaultStatus();
+  await refreshConnectivityStatus();
+  await refreshPersistentStorageStatus();
+  window.addEventListener("online", () => {
+    void refreshConnectivityStatus();
+  });
+  window.addEventListener("offline", () => {
+    void refreshConnectivityStatus();
+  });
   await render();
 
-  if ("serviceWorker" in navigator) {
-    await navigator.serviceWorker.register("/sw.js");
+  const isLocalhost = ["localhost", "127.0.0.1", "::1"].includes(window.location.hostname);
+  if ("serviceWorker" in navigator && !isLocalhost) {
+    await navigator.serviceWorker.register("/service-worker.js");
   }
 }
 

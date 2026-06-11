@@ -92,6 +92,13 @@ button:disabled {
   margin: 0.8rem 0 0;
 }
 
+.status-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
 .section-heading.compact {
   align-items: start;
 }
@@ -206,6 +213,23 @@ textarea {
   color: #9ee6d8;
   font-weight: 800;
   white-space: nowrap;
+}
+
+.connection-online,
+.storage-persistent {
+  background: rgba(158, 230, 216, 0.18);
+  color: #9ee6d8;
+}
+
+.connection-offline,
+.storage-standard {
+  background: rgba(255, 207, 158, 0.18);
+  color: #ffcf9e;
+}
+
+.storage-unsupported {
+  background: rgba(200, 193, 180, 0.14);
+  color: #c8c1b4;
 }
 
 #qr-canvas {

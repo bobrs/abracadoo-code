@@ -59,6 +59,23 @@ Backups are encrypted, passphrase-wrapped JSON by default. Older plaintext backu
 
 Restoring an older encrypted backup may restore keys or records that were later deleted or forgotten locally.
 
+## Roadmap
+
+The next phase order is:
+
+1. Phase 0: Local HumanKey MVP.
+2. Phase 0.5: Offline-Capable PWA Shell.
+3. Phase 1: Abracadabracadoo Messaging.
+
+Phase 0.5 is the offline shell milestone. It is meant to work after the first load if browser storage and cache remain intact: the app shell, encrypted local vault, TOTP verification, Path invite creation, and backup import/export should continue to function without internet. Browser storage persistence is advisory rather than guaranteed, and iOS browsers can be more eager about clearing caches or storage. Encrypted backups remain the backstop when local storage cannot be trusted to stay put.
+
+Offline shell notes:
+
+- First load happens online, then the installed or cached app should keep working offline as long as browser storage and cache remain intact.
+- `navigator.storage.persist()` is requested when the browser supports it, but the result is advisory rather than guaranteed.
+- iOS Safari and installed web apps can be stricter about cache and IndexedDB eviction, so encrypted backups remain the practical recovery path.
+- The offline shell covers the app shell, encrypted vault, TOTP verification, Path invite creation, and backup import/export. It does not add network messaging.
+
 ## Architecture pass V0.2
 
 V0.2 added the runtime/adapters layer so the same HumanKey domain model can run locally, against a server, through Nostr, or through manual offline exchange.
@@ -93,8 +110,8 @@ Domain services orchestrate contact, credential, event, policy, vault, and stora
 ## Near implementation targets
 
 1. Refine Acquaintance, Path, Loop, and Relationship management views.
-2. Prepare for optional QR display of message packets.
-3. Strengthen installable PWA/offline behavior after load.
+2. Phase 0.5: Offline-Capable PWA Shell.
+3. Prepare for optional QR display of message packets.
 4. Keep explicit consent confirmation as a later layer, separate from delivery, receipt, Loop witness, and Relationship status.
 
 ## V0.5: encrypted local vault

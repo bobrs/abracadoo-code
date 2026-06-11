@@ -3,7 +3,11 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="application-name" content="Abracadoo HumanKey MVP" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="Abracadoo" />
     <meta name="theme-color" content="#111318" />
+    <link rel="icon" href="/icon.svg" type="image/svg+xml" />
     <link rel="manifest" href="/manifest.webmanifest" />
     <title>Abracadoo HumanKey MVP</title>
   </head>
@@ -27,9 +31,14 @@
             </div>
             <span id="vault-status" class="pill">checking</span>
           </div>
+          <div class="status-row" aria-label="PWA status">
+            <span id="connection-status" class="pill">checking network</span>
+            <span id="storage-status" class="pill">storage pending</span>
+          </div>
           <p class="help">
             Active TOTP secrets are encrypted in local browser storage after unlock. Encrypted backups are passphrase-wrapped JSON.
           </p>
+          <p class="help">Offline shell works after first load if browser storage and cache remain intact.</p>
           <p class="help">
             Restoring an older encrypted backup may restore keys or records that were later deleted or forgotten locally.
           </p>
