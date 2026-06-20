@@ -1,6 +1,7 @@
 const TEXT_ENCODER = new TextEncoder();
 
 export const LOOPTLOOP_API_BASE = "https://api.looptloop.online/v0";
+export const AUTHORIZATION_ACCEPTANCE_SCHEMA = "WITNESSKEY_AUTHORIZATION_ACCEPTANCE_0_1" as const;
 
 export type AuthorizationOffer = {
   offerId: string;
@@ -22,11 +23,14 @@ export type AuthorizationOffer = {
 };
 
 export type AuthorizationOfferAcceptPayload = {
-  app: "abracadoo.app";
-  participant_ref: string;
-  participant_role: "human_authorizer";
+  schema: typeof AUTHORIZATION_ACCEPTANCE_SCHEMA;
+  accepted_by: {
+    app: "abracadoo.app";
+    participant_ref: string;
+    participant_role: "human_authorizer";
+  };
   consent_action: "accept";
-  consent_prompt_hash?: string;
+  consent_prompt_hash: string;
 };
 
 export type AuthorizationOfferRejectPayload = {
@@ -109,21 +113,23 @@ function unwrapOfferEnvelope(value: unknown): Record<string, unknown> {
   return value;
 }
 
-function bytesToBase64(bytes: Uint8Array): string {
-  let binary = "";
-  for (const byte of bytes) binary += String.fromCharCode(byte);
-  return btoa(binary);
+function bytesToHex(bytes: Uint8Array): string {
+  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
-export async function sha256Base64Utf8(value: string): Promise<string> {
+function isSha256Hash(value: string | undefined): value is `sha256:${string}` {
+  return typeof value === "string" && /^sha256:[0-9a-f]{64}$/i.test(value);
+}
+
+export async function sha256HexUtf8(value: string): Promise<string> {
   const digest = await crypto.subtle.digest("SHA-256", TEXT_ENCODER.encode(value));
-  return bytesToBase64(new Uint8Array(digest));
+  return bytesToHex(new Uint8Array(digest));
 }
 
 export async function deriveConsentPromptHash(offer: AuthorizationOffer): Promise<string | undefined> {
-  if (offer.consentPromptHash) return offer.consentPromptHash;
+  if (isSha256Hash(offer.consentPromptHash)) return offer.consentPromptHash;
   if (!offer.consentPrompt) return undefined;
-  return sha256Base64Utf8(offer.consentPrompt);
+  return `sha256:${await sha256HexUtf8(offer.consentPrompt)}`;
 }
 
 export function normalizeAuthorizationOffer(value: unknown, requestedOfferId: string): AuthorizationOffer {
@@ -171,7 +177,16 @@ async function expectJsonResponse(response: Response, failurePrefix: string): Pr
   const payload = await parseJsonResponse(response);
   if (response.ok) return payload;
 
+  const errorRecord =
+    isRecord(payload) && isRecord(payload.error)
+      ? payload.error
+      : null;
+  const errorCode = errorRecord && typeof errorRecord.code === "string" ? errorRecord.code : undefined;
+  const errorMessage = errorRecord && typeof errorRecord.message === "string" ? errorRecord.message : undefined;
   const message =
+    (errorCode && errorMessage && `${errorCode}: ${errorMessage}`) ||
+    errorMessage ||
+    errorCode ||
     (isRecord(payload) && typeof payload.error === "string" && payload.error) ||
     (isRecord(payload) && typeof payload.message === "string" && payload.message) ||
     `${failurePrefix} (${response.status})`;
@@ -195,15 +210,21 @@ export async function buildAcceptPayload(
   offer: AuthorizationOffer,
   participantRef: string
 ): Promise<AuthorizationOfferAcceptPayload> {
-  const payload: AuthorizationOfferAcceptPayload = {
-    app: "abracadoo.app",
-    participant_ref: participantRef,
-    participant_role: "human_authorizer",
-    consent_action: "accept",
-  };
   const consentPromptHash = await deriveConsentPromptHash(offer);
-  if (consentPromptHash) payload.consent_prompt_hash = consentPromptHash;
-  return payload;
+  if (!consentPromptHash) {
+    throw new Error("missing_consent_prompt_hash: Offer did not include a valid consent prompt hash and Abracadoo could not derive one locally.");
+  }
+
+  return {
+    schema: AUTHORIZATION_ACCEPTANCE_SCHEMA,
+    accepted_by: {
+      app: "abracadoo.app",
+      participant_ref: participantRef,
+      participant_role: "human_authorizer",
+    },
+    consent_action: "accept",
+    consent_prompt_hash: consentPromptHash,
+  };
 }
 
 export async function acceptAuthorizationOffer(

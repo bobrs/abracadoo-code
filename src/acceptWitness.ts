@@ -330,6 +330,10 @@ function renderError(message: string): void {
   `;
 }
 
+function formatActionError(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
 function setStatus(message: string, isError = false): void {
   const status = qs<HTMLElement>("#accept-status");
   status.textContent = message;
@@ -358,7 +362,7 @@ async function bindActions(offer: AuthorizationOffer): Promise<void> {
       });
       renderAccepted(offer, participantRef, accepted.response);
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : String(error), true);
+      setStatus(`Accept failed. ${formatActionError(error)}`, true);
     } finally {
       if (document.querySelector("#accept-offer")) setBusy(false);
     }
@@ -371,7 +375,7 @@ async function bindActions(offer: AuthorizationOffer): Promise<void> {
       await rejectAuthorizationOffer(offer.offerId);
       renderRejected(offer);
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : String(error), true);
+      setStatus(`Reject failed. ${formatActionError(error)}`, true);
       setBusy(false);
     }
   });
@@ -392,5 +396,5 @@ async function main(): Promise<void> {
 
 void main().catch((error) => {
   console.error(error);
-  renderError(error instanceof Error ? error.message : String(error));
+  renderError(formatActionError(error));
 });

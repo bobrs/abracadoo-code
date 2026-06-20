@@ -1,9 +1,11 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
+  AUTHORIZATION_ACCEPTANCE_SCHEMA,
+  acceptAuthorizationOffer,
   buildAcceptPayload,
   deriveConsentPromptHash,
   normalizeAuthorizationOffer,
-  sha256Base64Utf8,
+  sha256HexUtf8,
 } from "../authorizationOffers";
 import { createParticipantRef, getOrCreateStableParticipantRef } from "../localParticipantRef";
 
@@ -25,7 +27,7 @@ describe("normalizeAuthorizationOffer", () => {
           non_claims: ["This does not create a relationship."],
           expires_at: "2026-06-19T15:00:00.000Z",
           return_url: "https://witnessmark.example/return",
-          consent_prompt_hash: "prompt-hash",
+          consent_prompt_hash: `sha256:${"a".repeat(64)}`,
         },
       },
       "fallback-offer-id"
@@ -46,7 +48,7 @@ describe("normalizeAuthorizationOffer", () => {
       nonClaims: ["This does not create a relationship."],
       expiresAt: "2026-06-19T15:00:00.000Z",
       returnUrl: "https://witnessmark.example/return",
-      consentPromptHash: "prompt-hash",
+      consentPromptHash: `sha256:${"a".repeat(64)}`,
     });
   });
 
@@ -93,11 +95,14 @@ describe("buildAcceptPayload", () => {
     const payload = await buildAcceptPayload(offer, "abracadoo.local.participant/test-ref");
 
     expect(payload).toEqual({
-      app: "abracadoo.app",
-      participant_ref: "abracadoo.local.participant/test-ref",
-      participant_role: "human_authorizer",
+      schema: AUTHORIZATION_ACCEPTANCE_SCHEMA,
+      accepted_by: {
+        app: "abracadoo.app",
+        participant_ref: "abracadoo.local.participant/test-ref",
+        participant_role: "human_authorizer",
+      },
       consent_action: "accept",
-      consent_prompt_hash: await sha256Base64Utf8("Accept this witness?"),
+      consent_prompt_hash: `sha256:${await sha256HexUtf8("Accept this witness?")}`,
     });
     expect("authorization_payload" in payload).toBe(false);
     expect("payload" in payload).toBe(false);
@@ -109,12 +114,88 @@ describe("buildAcceptPayload", () => {
       {
         offer_id: "offer-hash",
         consent_prompt: "Prompt",
-        consent_prompt_hash: "already-computed",
+        consent_prompt_hash: `sha256:${"b".repeat(64)}`,
       },
       "offer-hash"
     );
 
-    expect(await deriveConsentPromptHash(offer)).toBe("already-computed");
+    expect(await deriveConsentPromptHash(offer)).toBe(`sha256:${"b".repeat(64)}`);
+  });
+
+  it("recomputes the hash when the offer hash is not a sha256: value", async () => {
+    const offer = normalizeAuthorizationOffer(
+      {
+        offer_id: "offer-recompute",
+        consent_prompt: "Prompt",
+        consent_prompt_hash: "already-computed",
+      },
+      "offer-recompute"
+    );
+
+    expect(await deriveConsentPromptHash(offer)).toBe(`sha256:${await sha256HexUtf8("Prompt")}`);
+  });
+
+  it("posts the exact acceptance schema and body required by LOOPtLOOP", async () => {
+    const offer = normalizeAuthorizationOffer(
+      {
+        offer_id: "offer-post",
+        consent_prompt: "Accept this witness?",
+        authorization_payload: {
+          secret: "do-not-send",
+        },
+      },
+      "offer-post"
+    );
+    let capturedInit: RequestInit | undefined;
+    const fetchImpl = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      capturedInit = init;
+      return new Response(JSON.stringify({ status: "accepted" }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    });
+
+    const accepted = await acceptAuthorizationOffer(offer, "abracadoo.local.participant/test-ref", { fetchImpl });
+    const body = JSON.parse(String(capturedInit?.body)) as Record<string, unknown>;
+    const acceptedBy = body.accepted_by as Record<string, unknown>;
+
+    expect(accepted.payload.schema).toBe(AUTHORIZATION_ACCEPTANCE_SCHEMA);
+    expect(body.schema).toBe(AUTHORIZATION_ACCEPTANCE_SCHEMA);
+    expect(acceptedBy.app).toBe("abracadoo.app");
+    expect(acceptedBy.participant_ref).toBe("abracadoo.local.participant/test-ref");
+    expect(acceptedBy.participant_role).toBe("human_authorizer");
+    expect(body.consent_action).toBe("accept");
+    expect(typeof body.consent_prompt_hash).toBe("string");
+    expect(String(body.consent_prompt_hash)).toMatch(/^sha256:[0-9a-f]{64}$/);
+    expect(JSON.stringify(body)).not.toContain("do-not-send");
+  });
+
+  it("surfaces API error code and message for the accept page", async () => {
+    const offer = normalizeAuthorizationOffer(
+      {
+        offer_id: "offer-error",
+        consent_prompt_hash: `sha256:${"c".repeat(64)}`,
+      },
+      "offer-error"
+    );
+    const fetchImpl = vi.fn(async () =>
+      new Response(
+        JSON.stringify({
+          error: {
+            code: "invalid_schema",
+            message: 'schema must be "WITNESSKEY_AUTHORIZATION_ACCEPTANCE_0_1".',
+          },
+        }),
+        {
+          status: 400,
+          headers: { "content-type": "application/json" },
+        }
+      )
+    );
+
+    await expect(acceptAuthorizationOffer(offer, "abracadoo.local.participant/test-ref", { fetchImpl })).rejects.toThrow(
+      'invalid_schema: schema must be "WITNESSKEY_AUTHORIZATION_ACCEPTANCE_0_1".'
+    );
   });
 });
 
