@@ -1,7 +1,26 @@
 const DB_NAME = "abracadoo-humankey";
-const DB_VERSION = 3;
+const DB_VERSION = 4;
 
-export type StoreName = "contacts" | "credentials" | "paths" | "lanes" | "events" | "loopWitnesses" | "secrets";
+export type StoreName =
+  | "contacts"
+  | "credentials"
+  | "paths"
+  | "lanes"
+  | "events"
+  | "loopWitnesses"
+  | "witnessReceipts"
+  | "secrets";
+
+const STORE_DEFINITIONS: { name: StoreName; indexByContactId: boolean }[] = [
+  { name: "contacts", indexByContactId: true },
+  { name: "credentials", indexByContactId: true },
+  { name: "paths", indexByContactId: true },
+  { name: "lanes", indexByContactId: true },
+  { name: "events", indexByContactId: true },
+  { name: "loopWitnesses", indexByContactId: true },
+  { name: "witnessReceipts", indexByContactId: false },
+  { name: "secrets", indexByContactId: false },
+];
 
 let openPromise: Promise<IDBDatabase> | undefined;
 
@@ -15,13 +34,15 @@ export function openAbracadooDb(): Promise<IDBDatabase> {
     request.onsuccess = () => resolve(request.result);
     request.onupgradeneeded = () => {
       const db = request.result;
+      const transaction = request.transaction;
+      if (!transaction) throw new Error("IndexedDB upgrade transaction was not available.");
 
-      for (const storeName of ["contacts", "credentials", "paths", "lanes", "events", "loopWitnesses", "secrets"] as StoreName[]) {
-        if (!db.objectStoreNames.contains(storeName)) {
-          const store = db.createObjectStore(storeName, { keyPath: "id" });
-          if (storeName !== "secrets") {
-            store.createIndex("contactId", "contactId", { unique: false });
-          }
+      for (const definition of STORE_DEFINITIONS) {
+        const store = db.objectStoreNames.contains(definition.name)
+          ? transaction.objectStore(definition.name)
+          : db.createObjectStore(definition.name, { keyPath: "id" });
+        if (definition.indexByContactId && !store.indexNames.contains("contactId")) {
+          store.createIndex("contactId", "contactId", { unique: false });
         }
       }
     };
