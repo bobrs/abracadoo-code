@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="application-name" content="Abracadoo HumanKey MVP" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="Abracadoo" />
+    <meta name="theme-color" content="#111318" />
+    <link rel="icon" href="/icon.svg" type="image/svg+xml" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <title>Abracadoo HumanKey MVP</title>
+    <script type="module" crossorigin src="/assets/main-e-3FIwRo.js"></script>
+    <link rel="modulepreload" crossorigin href="/assets/idb-DMf-W6wC.js">
+    <link rel="stylesheet" crossorigin href="/assets/idb-CJeVEGBF.css">
+  </head>
+  <body>
+    <main class="app-shell">
+      <header class="app-header" aria-label="Abracadoo application header">
+        <div class="brand-lockup">
+          <span class="brand-mark" aria-hidden="true">
+            <img src="/spiral.png" alt="" width="28" height="28" />
+          </span>
+          <div class="brand-text">
+            <strong>Abracadoo</strong>
+            <span>HumanKey</span>
+          </div>
+        </div>
+        <span id="connection-status" class="pill connection-offline" aria-label="Network status">Offline</span>
+      </header>
+
+      <header class="hero">
+        <div>
+          <p class="eyebrow">Abracadoo / HumanKey</p>
+          <h1>Acquaintance-first verification</h1>
+          <p>
+            Create a one-way HumanKey Acquaintance, share an Authenticator-compatible token, and verify the holder later by asking for their current code.
+          </p>
+          <span class="pill">HK_TOTP_1</span>
+        </div>
+
+        <section class="vault-card" aria-labelledby="vault-title">
+          <div class="section-heading compact">
+            <div>
+              <p class="eyebrow">Local vault</p>
+              <h2 id="vault-title">Encrypted vault</h2>
+            </div>
+            <span id="vault-status" class="pill">checking</span>
+          </div>
+          <div class="status-row" aria-label="Storage status">
+            <span id="storage-status" class="pill">storage pending</span>
+          </div>
+          <p class="help">
+            Active TOTP secrets are encrypted in local browser storage after unlock. Encrypted backups are passphrase-wrapped JSON.
+          </p>
+          <p class="help">Offline shell works after first load if browser storage and cache remain intact.</p>
+          <p class="help">
+            Restoring an older encrypted backup may restore keys or records that were later deleted or forgotten locally.
+          </p>
+          <label class="vault-passphrase-label">
+            Vault passphrase
+            <input id="vault-passphrase" type="password" autocomplete="current-password" placeholder="Set or unlock local vault" />
+          </label>
+          <div class="button-row vault-actions">
+            <button id="unlock-vault" type="button">Unlock / set up</button>
+            <button id="lock-vault" type="button">Lock</button>
+          </div>
+          <div class="button-row vault-actions">
+            <button id="export-backup" type="button">Export encrypted backup</button>
+            <button id="import-backup-trigger" type="button">Import backup</button>
+            <input id="import-backup-file" type="file" accept="application/json,.json" hidden />
+          </div>
+        </section>
+      </header>
+
+      <div class="layout">
+        <aside class="panel">
+          <h2>Create acquaintance</h2>
+          <form id="create-form" class="stack">
+            <label>
+              Local name
+              <input id="display-name" autocomplete="off" placeholder="Alice" required />
+            </label>
+            <label>
+              Notes
+              <textarea id="notes" placeholder="Why I may need to verify this person"></textarea>
+            </label>
+            <button type="submit">Create HK_TOTP_1 token</button>
+          </form>
+
+          <h2>Acquaintances</h2>
+          <div id="contact-list" class="contact-list"></div>
+        </aside>
+
+        <section id="selected-contact"></section>
+      </div>
+
+      <p id="fatal-error"></p>
+    </main>
+    <div id="notice" class="notice" hidden></div>
+  </body>
+</html>
