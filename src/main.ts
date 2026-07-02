@@ -24,6 +24,7 @@ import {
 } from "./humankey/services";
 import type { HumanKeyContact, HumanKeyEvent, HumanKeyPath, HumanKeyTotpCredential } from "./humankey/model/types";
 import { isUnlockableSecretVault } from "./vault/SecretVault";
+import { isUnlockableStorageAdapter } from "./adapters/storage/StorageAdapter";
 import "./styles.css";
 
 const COMPACT_MODE_STORAGE_KEY = "abracadoo.ui.compactMode.v1";
@@ -123,6 +124,39 @@ function applyCompactMode(value: boolean): void {
     toggle.setAttribute("aria-pressed", value ? "true" : "false");
     toggle.textContent = value ? "Compact mode on" : "Compact mode";
   }
+}
+
+function isLocalDataUnlocked(): boolean {
+  const storage = runtime.storage;
+  const vault = runtime.vault;
+  const storageUnlocked = !isUnlockableStorageAdapter(storage) || storage.isUnlocked();
+  const vaultUnlocked = !isUnlockableSecretVault(vault) || vault.isUnlocked();
+  return storageUnlocked && vaultUnlocked;
+}
+
+function setAppDataLockedState(locked: boolean): void {
+  document.body.classList.toggle("data-locked", locked);
+}
+
+function renderLockedShell(message: string): void {
+  const lockedShell = qs<HTMLElement>("#locked-shell");
+  lockedShell.hidden = false;
+  lockedShell.innerHTML = `
+    <div class="section-heading compact">
+      <div>
+        <p class="eyebrow">Locked</p>
+        <h2>Local data is encrypted</h2>
+      </div>
+      <span class="pill">unlock required</span>
+    </div>
+    <p>${escapeHtml(message)}</p>
+  `;
+}
+
+function hideLockedShell(): void {
+  const lockedShell = qs<HTMLElement>("#locked-shell");
+  lockedShell.hidden = true;
+  lockedShell.innerHTML = "";
 }
 
 function setText(selector: string, value: string): void {
@@ -785,23 +819,30 @@ function bindSelectedContactActions(contact: HumanKeyContact, credential: HumanK
 
 async function refreshVaultStatus(): Promise<void> {
   const status = qs<HTMLElement>("#vault-status");
-  if (!isUnlockableSecretVault(runtime.vault)) {
+  const storage = runtime.storage;
+  const vault = runtime.vault;
+  const storageUnlockable = isUnlockableStorageAdapter(storage);
+  const vaultUnlockable = isUnlockableSecretVault(vault);
+  if (!storageUnlockable && !vaultUnlockable) {
     status.textContent = "open";
     status.className = "pill vault-open";
     status.title = "This runtime does not require a vault unlock.";
     return;
   }
 
-  const hasVault = await runtime.vault.hasVault();
-  const state = runtime.vault.isUnlocked() ? "unlocked" : hasVault ? "locked" : "new";
+  const storageHasStore = storageUnlockable ? await storage.hasStore() : false;
+  const vaultHasVault = vaultUnlockable ? await vault.hasVault() : false;
+  const storageUnlocked = !storageUnlockable || storage.isUnlocked();
+  const vaultUnlocked = !vaultUnlockable || vault.isUnlocked();
+  const state = storageUnlocked && vaultUnlocked ? "unlocked" : storageHasStore || vaultHasVault ? "locked" : "new";
   status.textContent = state;
   status.className = `pill vault-${state}`;
   status.title =
     state === "unlocked"
-      ? "Local secret material is available until you lock the vault or close the page."
+      ? "Local app data is unlocked until you lock it or close the page."
       : state === "locked"
-        ? "Unlock the local vault before creating, verifying, exporting, or importing secret material."
-        : "Set up the local encrypted vault before creating an Acquaintance.";
+        ? "Unlock local data before viewing acquaintances, paths, or messages."
+        : "Set up local data before creating an Acquaintance.";
 }
 
 async function refreshConnectivityStatus(): Promise<void> {
@@ -845,17 +886,46 @@ function getVaultPassphraseFromUi(): string {
 }
 
 async function ensureVaultUnlocked(): Promise<void> {
-  if (!isUnlockableSecretVault(runtime.vault)) return;
-  if (runtime.vault.isUnlocked()) return;
+  const storage = runtime.storage;
+  const vault = runtime.vault;
+  const storageUnlockable = isUnlockableStorageAdapter(storage);
+  const vaultUnlockable = isUnlockableSecretVault(vault);
+  const storageUnlocked = !storageUnlockable || storage.isUnlocked();
+  const vaultUnlocked = !vaultUnlockable || vault.isUnlocked();
+  if (storageUnlocked && vaultUnlocked) return;
 
   const passphrase = getVaultPassphraseFromUi() || prompt("Enter your local vault passphrase") || "";
   if (!passphrase) throw new Error("Vault passphrase is required.");
 
-  if (await runtime.vault.hasVault()) {
-    await runtime.vault.unlock(passphrase);
-  } else {
-    await runtime.vault.initialize(passphrase);
+  const storageHasStore = storageUnlockable ? await storage.hasStore() : false;
+  const vaultHasVault = vaultUnlockable ? await vault.hasVault() : false;
+
+  try {
+    if (storageUnlockable && storageHasStore) {
+      await storage.unlock(passphrase);
+    }
+
+    if (vaultUnlockable && vaultHasVault) {
+      await vault.unlock(passphrase);
+    }
+
+    if (storageUnlockable && !storageHasStore) {
+      await storage.initialize(passphrase);
+    }
+
+    if (vaultUnlockable && !vaultHasVault) {
+      await vault.initialize(passphrase);
+    }
+  } catch (error) {
+    if (storageUnlockable && storage.isUnlocked()) {
+      storage.lock();
+    }
+    if (vaultUnlockable && vault.isUnlocked()) {
+      vault.lock();
+    }
+    throw error;
   }
+
   await refreshVaultStatus();
 }
 
@@ -936,7 +1006,7 @@ async function bindBackupActions(): Promise<void> {
     try {
       await ensureVaultUnlocked();
       qs<HTMLInputElement>("#vault-passphrase").value = "";
-      showNotice("Local vault unlocked.");
+      showNotice("Local data unlocked.");
       await render();
     } catch (error) {
       showNotice(friendlyErrorMessage(error));
@@ -944,10 +1014,14 @@ async function bindBackupActions(): Promise<void> {
   });
 
   qs<HTMLButtonElement>("#lock-vault").addEventListener("click", async () => {
-    if (isUnlockableSecretVault(runtime.vault)) runtime.vault.lock();
+    const storage = runtime.storage;
+    const vault = runtime.vault;
+    if (isUnlockableStorageAdapter(storage)) storage.lock();
+    if (isUnlockableSecretVault(vault)) vault.lock();
     qs<HTMLInputElement>("#vault-passphrase").value = "";
     await refreshVaultStatus();
-    showNotice("Local vault locked.");
+    showNotice("Local data locked.");
+    await render();
   });
 
   qs<HTMLButtonElement>("#export-backup").addEventListener("click", async () => {
@@ -1041,6 +1115,19 @@ function escapeHtml(value: string): string {
 }
 
 async function render(): Promise<void> {
+  const locked = !isLocalDataUnlocked();
+  setAppDataLockedState(locked);
+  if (locked) {
+    hideLockedShell();
+    renderLockedShell("Unlock local data to view acquaintances, paths, and history.");
+    const contactList = qs<HTMLElement>("#contact-list");
+    contactList.innerHTML = "";
+    const panel = qs<HTMLElement>("#selected-contact");
+    panel.innerHTML = "";
+    return;
+  }
+
+  hideLockedShell();
   await renderContactList();
   await renderSelectedContact();
 }

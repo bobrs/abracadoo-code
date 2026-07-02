@@ -189,6 +189,20 @@ button:disabled {
   color: #c8c1b4;
 }
 
+.locked-shell {
+  width: min(920px, 100%);
+  margin: 0 auto 1rem;
+}
+
+.locked-shell h2 {
+  margin: 0;
+}
+
+.locked-shell p {
+  margin: 0.65rem 0 0;
+  color: #c8c1b4;
+}
+
 .eyebrow {
   margin: 0;
   text-transform: uppercase;
@@ -355,6 +369,10 @@ body.compact-mode .hero {
 body.compact-mode .flow-section {
   margin-top: 1rem;
   padding-top: 0.85rem;
+}
+
+body.data-locked .layout {
+  display: none;
 }
 
 .pill {

@@ -51,7 +51,7 @@
             <span id="storage-status" class="pill">storage pending</span>
           </div>
           <p class="help">
-            Active TOTP secrets are encrypted in local browser storage after unlock. Encrypted backups are passphrase-wrapped JSON.
+            All local acquaintance data and secrets are encrypted in browser storage after unlock. Encrypted backups are passphrase-wrapped JSON.
           </p>
           <p class="help">Offline shell works after first load if browser storage and cache remain intact.</p>
           <p class="help">
@@ -86,6 +86,8 @@
         </a>
         <p class="help demo-note">Opens Streamable in a new tab.</p>
       </section>
+
+      <section id="locked-shell" class="panel locked-shell" hidden></section>
 
       <div class="layout">
         <aside class="panel">
