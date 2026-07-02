@@ -10,9 +10,9 @@
     <link rel="icon" href="/icon.svg" type="image/svg+xml" />
     <link rel="manifest" href="/manifest.webmanifest" />
     <title>Abracadoo HumanKey MVP</title>
-    <script type="module" crossorigin src="/assets/main-DOCpGwN6.js"></script>
-    <link rel="modulepreload" crossorigin href="/assets/idb-_v1O9Fb3.js">
-    <link rel="stylesheet" crossorigin href="/assets/idb-BseKz6XL.css">
+    <script type="module" crossorigin src="/assets/main-DvF9jfMQ.js"></script>
+    <link rel="modulepreload" crossorigin href="/assets/idb-5PpHocX_.js">
+    <link rel="stylesheet" crossorigin href="/assets/idb-DNYkYKya.css">
   </head>
   <body>
     <main class="app-shell">
@@ -26,14 +26,17 @@
             <span>HumanKey</span>
           </div>
         </div>
-        <span id="connection-status" class="pill connection-offline" aria-label="Network status">Offline</span>
+        <div class="header-actions">
+          <button id="compact-mode-toggle" class="header-toggle" type="button" aria-pressed="false">Compact mode</button>
+          <span id="connection-status" class="pill connection-offline" aria-label="Network status">Offline</span>
+        </div>
       </header>
 
       <header class="hero">
         <div>
           <p class="eyebrow">Abracadoo / HumanKey</p>
           <h1>Acquaintance-first verification</h1>
-          <p>
+          <p class="hero-copy">
             Create a one-way HumanKey Acquaintance, share an Authenticator-compatible token, and verify the holder later by asking for their current code.
           </p>
           <span class="pill">HK_TOTP_1</span>
@@ -79,22 +82,12 @@
             <p class="eyebrow">Demo</p>
             <h2 id="demo-title">Abracadoo in motion</h2>
           </div>
-          <span class="pill">streamable</span>
+          <span class="pill">link</span>
         </div>
-        <p class="help">
-          A short walkthrough of the current HumanKey flow. This sits in the open space below the hero so the first screen feels intentional instead of empty.
-        </p>
-        <div class="demo-video" aria-label="Abracadoo demo video">
-          <iframe
-            allow="fullscreen"
-            allowfullscreen
-            loading="lazy"
-            height="100%"
-            src="https://streamable.com/e/r8og05?"
-            title="Abracadoo demo video"
-            width="100%"
-          ></iframe>
-        </div>
+        <a class="demo-link" href="https://streamable.com/r8og05" target="_blank" rel="noreferrer">
+          Watch the demo video
+        </a>
+        <p class="help demo-note">Opens Streamable in a new tab.</p>
       </section>
 
       <div class="layout">

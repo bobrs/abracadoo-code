@@ -26,12 +26,14 @@ import type { HumanKeyContact, HumanKeyEvent, HumanKeyPath, HumanKeyTotpCredenti
 import { isUnlockableSecretVault } from "./vault/SecretVault";
 import "./styles.css";
 
+const COMPACT_MODE_STORAGE_KEY = "abracadoo.ui.compactMode.v1";
 const runtime = createBrowserRuntime();
 let selectedContactId: string | undefined;
 let currentQrUri: string | undefined;
 let lastReceivedManualMessage: { contactId: string; plaintext: string; at: string } | undefined;
 let lastPathInviteText: { contactId: string; text: string } | undefined;
 let lastSealedMessageText: { contactId: string; text: string } | undefined;
+let compactMode = readCompactModePreference();
 
 type ContactUiStatus = {
   label: string;
@@ -95,6 +97,32 @@ function qs<T extends Element>(selector: string): T {
   const element = document.querySelector<T>(selector);
   if (!element) throw new Error(`Missing element: ${selector}`);
   return element;
+}
+
+function readCompactModePreference(): boolean {
+  try {
+    return window.localStorage.getItem(COMPACT_MODE_STORAGE_KEY) === "true";
+  } catch {
+    return false;
+  }
+}
+
+function saveCompactModePreference(value: boolean): void {
+  try {
+    window.localStorage.setItem(COMPACT_MODE_STORAGE_KEY, value ? "true" : "false");
+  } catch {
+    // Ignore storage failures; compact mode is still available for this session.
+  }
+}
+
+function applyCompactMode(value: boolean): void {
+  compactMode = value;
+  document.body.classList.toggle("compact-mode", value);
+  const toggle = document.querySelector<HTMLButtonElement>("#compact-mode-toggle");
+  if (toggle) {
+    toggle.setAttribute("aria-pressed", value ? "true" : "false");
+    toggle.textContent = value ? "Compact mode on" : "Compact mode";
+  }
 }
 
 function setText(selector: string, value: string): void {
@@ -1020,6 +1048,12 @@ async function render(): Promise<void> {
 async function main(): Promise<void> {
   await bindCreateForm();
   await bindBackupActions();
+  applyCompactMode(compactMode);
+  qs<HTMLButtonElement>("#compact-mode-toggle").addEventListener("click", () => {
+    const nextValue = !compactMode;
+    saveCompactModePreference(nextValue);
+    applyCompactMode(nextValue);
+  });
   await refreshVaultStatus();
   await refreshConnectivityStatus();
   await refreshPersistentStorageStatus();
