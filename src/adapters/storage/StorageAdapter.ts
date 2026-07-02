@@ -32,3 +32,22 @@ export interface StorageAdapter {
   listLoopWitnessesForContact(contactId: ContactId): Promise<HumanKeyLoopWitness[]>;
   saveLoopWitness(loopWitness: HumanKeyLoopWitness): Promise<void>;
 }
+
+export interface UnlockableStorageAdapter extends StorageAdapter {
+  isUnlocked(): boolean;
+  hasStore(): Promise<boolean>;
+  initialize(passphrase: string): Promise<void>;
+  unlock(passphrase: string): Promise<void>;
+  lock(): void;
+}
+
+export function isUnlockableStorageAdapter(storage: StorageAdapter): storage is UnlockableStorageAdapter {
+  const candidate = storage as Partial<UnlockableStorageAdapter>;
+  return (
+    typeof candidate.isUnlocked === "function" &&
+    typeof candidate.hasStore === "function" &&
+    typeof candidate.initialize === "function" &&
+    typeof candidate.unlock === "function" &&
+    typeof candidate.lock === "function"
+  );
+}

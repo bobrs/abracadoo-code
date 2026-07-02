@@ -53,7 +53,7 @@ Then open the Vite URL shown in the terminal.
 
 ## Current local security note
 
-The browser runtime uses `EncryptedIndexedDbSecretVault`. Active TOTP secrets and inbound Path receive keys are stored behind the `SecretVault` boundary and encrypted at rest after local vault setup/unlock.
+The browser runtime uses `EncryptedIndexedDbSecretVault` and encrypted browser storage for all local acquaintance state. Active TOTP secrets, inbound Path receive keys, contacts, paths, events, and loop witnesses are encrypted at rest after local setup/unlock.
 
 Backups are encrypted, passphrase-wrapped JSON by default. Older plaintext backup shapes are still accepted for compatibility and restored through the vault boundary.
 

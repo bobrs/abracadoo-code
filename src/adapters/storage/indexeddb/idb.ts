@@ -1,5 +1,5 @@
 const DB_NAME = "abracadoo-humankey";
-const DB_VERSION = 4;
+const DB_VERSION = 5;
 
 export type StoreName =
   | "contacts"
@@ -9,6 +9,7 @@ export type StoreName =
   | "events"
   | "loopWitnesses"
   | "witnessReceipts"
+  | "appState"
   | "secrets";
 
 const STORE_DEFINITIONS: { name: StoreName; indexByContactId: boolean }[] = [
@@ -19,6 +20,7 @@ const STORE_DEFINITIONS: { name: StoreName; indexByContactId: boolean }[] = [
   { name: "events", indexByContactId: true },
   { name: "loopWitnesses", indexByContactId: true },
   { name: "witnessReceipts", indexByContactId: false },
+  { name: "appState", indexByContactId: false },
   { name: "secrets", indexByContactId: false },
 ];
 
@@ -77,6 +79,11 @@ export async function getRecord<T>(storeName: StoreName, id: string): Promise<T 
 export async function deleteRecord(storeName: StoreName, id: string): Promise<void> {
   const store = await txStore(storeName, "readwrite");
   await requestToPromise(store.delete(id));
+}
+
+export async function clearStore(storeName: StoreName): Promise<void> {
+  const store = await txStore(storeName, "readwrite");
+  await requestToPromise(store.clear());
 }
 
 export async function getAllRecords<T>(storeName: StoreName): Promise<T[]> {
